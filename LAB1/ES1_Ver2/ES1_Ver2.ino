@@ -17,8 +17,7 @@ void loop() {
   digitalWrite(RLED_PIN, redLedState);
   redLedState = !redLedState;
   delay(R_HALF_PERIOD);
-
-
+}
 
 //To drive the second LED, use an Interrupt Service Routine connected to 
 //the MCU Timer1 (using the MBED_RPI_PICO_TimerInterrupt library or the Scheduler library).

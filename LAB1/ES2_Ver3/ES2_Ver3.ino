@@ -31,11 +31,11 @@ void loop() {
     }
     if (inByte == 'R') {
       Serial.print("LED RED Status: ");
-      Serial.println(redLedState);
+      Serial.println(!redLedState);
     } 
     else if (inByte == 'L') {
       Serial.print("LED GREEN Status: ");
-      Serial.println(greenLedState);
+      Serial.println(!greenLedState);
     } 
     else {
       Serial.println("Invalid command");

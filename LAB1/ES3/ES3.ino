@@ -33,9 +33,12 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(PIR_PIN), checkPresence, CHANGE);
 }
 void loop() {
+  noInterrupts();
+  int a = tot_count;
+  interrupts();
   // Invia il conteggio totale al PC
   Serial.print("Total people count: ");
-  Serial.println(tot_count);
+  Serial.println(a);
   // Attende 30 secondi (30000 millisecondi) prima di stampare nuovamente.
   // Nota: usare delay() qui è corretto perché l'acquisizione dei dati 
   // del sensore è gestita in modo totalmente asincrono dall'Interrupt hardware.
