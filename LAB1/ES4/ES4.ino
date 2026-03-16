@@ -45,7 +45,7 @@ void loop() {
       } else {
         current_speed -= step_size;
         if (current_speed < 0.0) current_speed = 0.0; // Previene lo sforamento
-        analogWrite(FAN_PIN, (int)current_speed); [2]
+        analogWrite(FAN_PIN, (int)current_speed);
         Serial.print("Decreasing speed: ");
         Serial.println(current_speed);
       }
