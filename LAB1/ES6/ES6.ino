@@ -8,14 +8,11 @@ const float R0 = 100000.0;
 // Nota: l'indirizzo tipico dei moduli PCF8574 è 0x27 (o 0x3F).
 LiquidCrystal_PCF8574 lcd(0x27);
 void setup() {
-  // Inizializza il bus I2C (basato sulla libreria Wire)
-  Wire.begin();
   // Inizializza l'LCD definendo il numero di colonne e righe (16x2)
   lcd.begin(16, 2);
+  lcd.home();
+  lcd.clear();
   lcd.setBacklight(255); // Accende la retroilluminazione
-  // OTTIMIZZAZIONE I2C: 
-  // Scriviamo la parte statica del messaggio una sola volta nel setup()
-  lcd.setCursor(0, 0);
   lcd.print("Temperature:");
 }
 void loop() {
@@ -25,12 +22,8 @@ void loop() {
   R = R0 * R;
   float temperature = 1.0 / (log(R / R0) / B + 1 / 298.15) - 273.15; 
   // 2. Aggiornamento del display LCD
-  // Ci posizioniamo sulla seconda riga per aggiornare solo il valore
-  lcd.setCursor(0, 1);
   lcd.print(temperature);
-  // Aggiungiamo spazi per pulire eventuali caratteri residui 
-  // senza dover usare la costosa funzione lcd.clear()
-  lcd.print(" C    ");
+  lcd.setCursor(12, 0);
   // 3. Attende 10 secondi prima della prossima lettura
-  delay(10000);
+  delay(1000);
 }
