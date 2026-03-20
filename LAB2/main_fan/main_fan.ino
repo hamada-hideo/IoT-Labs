@@ -1,5 +1,5 @@
 #include <Scheduler.h>
-#include <Arduino_LSM6DS0X.h>
+#include <Arduino_LSM6DSOX.h>
 #include <Wire.h>
 #include <LiquidCrystal_PCF8574.h> // Libreria richiesta dalle specifiche
 
@@ -16,6 +16,8 @@ float current_speed = 0;
 	// Definizione del numero di step (10 step come richiesto dalle specifiche)
 	// Valore massimo PWM è 255. Incremento = 255.0 / 10 = 25.5
 const float step_size = 25.5;
+int lastTemp = 0;
+int temperature;
 
 void setup() 
 	{
@@ -32,22 +34,16 @@ void setup()
     	Serial.println("Failed to initialize IMU!");
     	while(1);
   		}
-	}
   	// Configurazione dei Pin
   	pinMode(FAN_PIN, OUTPUT);
-  	Scheduler.startloop(loopTemp);
+  	Scheduler.startLoop(loopTemp);
+
+		lcd.begin(16, 2);
+		lcd.home();
+		lcd.clear();
+		lcd.setBacklight(255); // Accende la retroilluminazione
+		lcd.print("Temperature:");
 	}
-
- lcd.begin(16, 2);
- lcd.home();
- lcd.clear();
- lcd.setBacklight(255); // Accende la retroilluminazione
- lcd.print("Temperature:");
-
-
-
-int lastTemp = 0;
-
 
 void loop()
 	{
@@ -59,20 +55,19 @@ void loop()
 		}
 		if(temperature > lastTemp)
 		{
-			current_speed += step_size:
+			current_speed += step_size;
 			analogWrite(FAN_PIN, (int)current_speed);
 		}
 
         lastTemp = temperature;                                                           
 	}
 
-                                                                        	}
 void loopTemp()
    {
    	
    	if (IMU.temperatureAvailable()) 
    		{
-    			int temperature = 0;
+    			temperature = 0;
     			IMU.readTemperature(temperature);
     			lcd.print(temperature);
     			lcd.setCursor(12, 0);
