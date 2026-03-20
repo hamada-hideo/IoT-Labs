@@ -16,15 +16,12 @@ void setup() {
 
 void loop() {
   if (samplesRead) {
-    Serial.println("before noInterrupts()");
-    noInterrupts();
-    Serial.println("after noInterrupts()");
     for (int i = 0; i < samplesRead; i++) {
-      Serial.println(sampleBuffer[i]);
+      noInterrupts();
+      int a = sampleBuffer[i];
+      interrupts();
+      Serial.println(a);
     }
-    Serial.println("before interrupts()");
-    interrupts();
-    Serial.println("after interrupts()");
     samplesRead = 0;
   }
 }
