@@ -9,14 +9,16 @@ const int PIR_PIN = 4;
 short sampleBuffer[256];
 volatile int samplesRead = 0;
 
-LLT1 = 15; //Low led temp 1 (with presence);
-HLT1 = 20; // High led temp 1 (with presence);
-LLT2 = 17; // Low led temp 2 (w/o presnece);
-HLT2 = 22; // High led temp 2 (w/o presence);
+LLT1 = 15; //Low led temp 1 (with presence); SET 1 LED
+HLT1 = 20; // High led temp 1 (with presence); 
 
-LFT1 = 20; // Low fan temp 1 (w/ presence);
+LLT2 = 17; // Low led temp 2 (w/o presnece);  SET 2 LED
+HLT2 = 22; // High led temp 2 (w/o presence); 
+
+LFT1 = 20; // Low fan temp 1 (w/ presence); SET 1  FAN 
 HFT1 = 30; // High fan temp 1 (w/ presence);
-LFT2 = 22; // Low fan temp 2 (w/o presence);
+
+LFT2 = 22; // Low fan temp 2 (w/o presence); SET 2 FAN  
 HFT2 = 32; // high fan temp 2 (w/o presence);
 
 
