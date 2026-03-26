@@ -60,6 +60,7 @@ int currentScreen = 0;
 float clapThresh = 30000.0; // soglia alta per gli applausi
 int nClaps = 2;
 int clapInterval = 3000; // ms
+int clapDuration = 200; // ms
 
 void setup() 
 	{
@@ -377,13 +378,13 @@ void loopMic()
 void loopMicBonus() {
 	static int k = 0; 
 	static unsigned long begTime;
-	static unsigned long lastTime; 
+	static unsigned long lastTime = millis(); 
 	if (samplesRead) {
 		for (int i = 0; i < samplesRead; i++) {
 			noInterrupts();
 			int a = sampleBuffer[i];
 			interrupts();
-			if(a > clapThresh) {
+			if(a > clapThresh && (millis() - lastTime) > clapDuration) {
 				Serial.println(a);
 				if(k == 0) {
 					begTime = millis();
