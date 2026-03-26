@@ -96,7 +96,10 @@ void setup()
 
 	// Loop init	
 	Scheduler.startLoop(loopPIR);
-	Scheduler.startLoop(loopMic);
+
+	// Scheduler.startLoop(loopMic); // Base version
+	Scheduler.startLoop(loopMicBonus); // Bonus version
+	
 	Scheduler.startLoop(loopTemp);
 
 	}
@@ -260,9 +263,12 @@ void loop()
 	  }
 
   }
+
+	// Bonus version
   noInterrupts();
   digitalWrite(GLED_PIN,micPresence);
   Interrupts();
+
 }
 
 
@@ -314,6 +320,7 @@ void loopPIR()
     	yield(); // without this the loop hogs the scheduler
 	}
 
+// Base Version
 void loopMic()
 	{
 		static int k; 
@@ -362,6 +369,7 @@ void loopMic()
   		yield();
 	}
 
+// Bonus Version
 void loopMicBonus() {
 	static int k = 0; 
 	static unsigned long begTime;
