@@ -56,6 +56,11 @@ int fanPercent = 0;
 int heaterPercent = 0;
 int currentScreen = 0;
 
+// MIC Clap
+float clapThresh = 2000.0;
+int nClaps = 2;
+int clapInterval = 3000; // ms
+
 void setup() 
 	{
 
@@ -351,6 +356,46 @@ void loopMic()
 
   		yield();
 	}
+
+void loopMicBonus() {
+	static int k = 0; 
+	static unsigned long begTime;
+	static unsigned long lastTime; 
+	if (samplesRead) {
+		for (int i = 0; i < samplesRead; i++) {
+			noInterrupts();
+			int a = sampleBuffer[i];
+			interrupts();
+			if(a > clapThresh) {
+				if(k == 0) {
+					begTime = millis();
+				}
+				k++;
+				lastTime = millis();
+				if(k % nClaps == 0 && (lastTime - begTime) < clapInterval) {
+					noInterrupts();
+					micPresence = !micPresence;
+					interrupts();
+					k = 0;
+				}
+			}
+
+			if(micPresence && (millis() - lastTime >= timeout_sound)) {
+				noInterrupts();
+				micPresence = 0;
+				interrupts();
+			} 
+		}
+
+		noInterrupts();
+		samplesRead = 0;
+		interrupts();
+
+	}
+
+	yield();
+
+}
 
 void onPDMdata()
 {
