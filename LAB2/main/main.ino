@@ -266,8 +266,9 @@ void loop()
 
 	// Bonus version
   noInterrupts();
-  digitalWrite(GLED_PIN,micPresence);
-  Interrupts();
+	bool mp = micPresence;
+  interrupts();
+	digitalWrite(GLED_PIN,mp);
 
 }
 
@@ -351,7 +352,10 @@ void loopMic()
       				
       			}
 
-				if(micPresence && (millis() - lastTime >= timeout_sound))
+				noInterrupts();
+				bool mp = micPresence;
+				interrupts();
+				if(mp && (millis() - lastTime >= timeout_sound))
       				{
       					noInterrupts();
       					micPresence = 0;
@@ -380,6 +384,7 @@ void loopMicBonus() {
 			int a = sampleBuffer[i];
 			interrupts();
 			if(a > clapThresh) {
+				Serial.println(a);
 				if(k == 0) {
 					begTime = millis();
 				}
@@ -393,7 +398,11 @@ void loopMicBonus() {
 				}
 			}
 
-			if(micPresence && (millis() - lastTime >= timeout_sound)) {
+			noInterrupts();
+			bool mp = micPresence;
+			bool pp = pirPresence;
+			interrupts();
+			if(mp && (millis() - lastTime >= timeout_sound) && !pp) {
 				noInterrupts();
 				micPresence = 0;
 				interrupts();
