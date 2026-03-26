@@ -1,7 +1,7 @@
 # Laboratori di IoT 
 
 - [x] Lab01
-- [ ] Lab02
+- [x] Lab02
 - [ ] Lab03
 - [ ] Lab04
 - [ ] Lab05
