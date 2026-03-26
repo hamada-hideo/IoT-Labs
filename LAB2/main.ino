@@ -52,7 +52,9 @@ volatile bool pirPresence, micPresence;
 
 // Display
 LiquidCrystal_PCF8574 lcd(0x27);
-
+int fanPercent = 0;
+int heaterPercent = 0;
+int currentScreen = 0;
 
 void setup() 
 	{
@@ -78,11 +80,12 @@ void setup()
   	
 
   	// LCD init
+
 	lcd.begin(16, 2);
 	lcd.home();
 	lcd.clear();
 	lcd.setBacklight(255); // Turns on backlighting 
-	lcd.print("Temperature:");
+	
 
 	// Loop init	
 	Scheduler.startLoop(loopPIR);
@@ -126,36 +129,93 @@ void loop()
 			{
 				Serial.println("Fan @ max speed");
 				analogWrite(FAN_PIN,255); // sets fan to the max (COOLER)
+				fanPercent = 100;
 			}
 			else if(temperature <= lowFanTemp) // avoids trying to set fanspeed below 0 
 			{
 				Serial.print("Fan @ min speed");
 				analogWrite(FAN_PIN,0); // sets fan to the min	
+				fanPercent = 0;
 			}
 			else
 			{
 				propIncrease = (float)(temperature - lowFanTemp) / (highFanTemp - lowFanTemp) * 255; //calculate proportional increase for fanspeed
 				analogWrite(FAN_PIN,propIncrease);
+				fanPercent = (float)propIncrease/255 * 100;
 			}
 			if(temperature >= highLedTemp) // avoids trying to raise fanspeed above 255
 			{
 				Serial.println("Led @ min brightness");
 				analogWrite(RLED_PIN,0); //sets led to the minimum (HEATER)
+				heaterPercent = 0;
 			}
 			else if(temperature <= lowLedTemp) // avoids trying to set fanspeed below 0 
 			{
 				Serial.print("Led @ max brightness");	
 				analogWrite(RLED_PIN,255); // sets led to the max
+				heaterPercent = 100; 
 			}
 			else
 			{
 				propIncrease = (float)(temperature - lowLedTemp) / (highLedTemp - lowLedTemp) * 255; //calculate proportional increase for fanspeed
 				analogWrite(RLED_PIN,255 - propIncrease);
+				heaterPercent = 100 - (float)propIncrease/255 * 100;
 			}
 
 		}
+	  lastTemp = temperature; 
+	  // DISPLAY PART 
+	  static unsigned long lastScreenSwitch = 0;
+	  if(millis() - lastScreenSwitch >= 5000)
+	  {
+	  	lastScreenSwitch = millis();
+	  	currentScreen = (currentScreen + 1) % 4; // cycles 0->1->2->3->0
+	  	lcd.clear();
+	  }
+	  switch(currentScreen)
+	  {
+	  	case 0:
+	  	lcd.setCursor(0, 0);
+	  	lcd.print("Temperature:");
+	  	lcd.setCursor(0,1);
+	  	lcd.print(temperature);
+	  	break;
+	  	case 1: 
+	  	lcd.setCursor(0,0);
+	  	lcd.print("Fan %:");
+	  	lcd.print(fanPercent);
+	  	lcd.setCursor(0,1);
+	  	lcd.print("Heater %:");
+	  	lcd.print(heaterPercent);
+	  	break;
+	  	case 2:
+	  	lcd.setCursor(0,0);
+	  	if(presence)
+	  	{
+	  		lcd.print("Presence: Y");
+	  	}
+	  	if(!presence)
+	  	{
+	  		lcd.print("Presence: N");
+	  	}
+	  	break;
+	  	case 3:
+	  	//First Row
+	  	lcd.setCursor(0,0);
+	  	lcd.print(" LEDS    FAN");
+	  	//Second Row
+	  	lcd.setCursor(0,1);
+	  	lcd.print(lowLedTemp);
+	  	lcd.setCursor(3,1); // Sets 1 space inbetween
+	  	lcd.print(highLedTemp);
+	  	lcd.setCursor(9,1); //sets 4 spaces inbetween leds and fan temps 
+	  	lcd.print(lowFanTemp);
+	  	lcd.setCursor(12,1); // sets 1 space inbetween
+	  	lcd.print(highFanTemp);
+	  	break; 
+	  }
 
-      lastTemp = temperature;                                                           
+                                                                 
 	}
 
 
@@ -175,8 +235,7 @@ void loopTemp()
         	if (IMU.temperatureAvailable())
         	{
             	IMU.readTemperature(temperature);
-            	lcd.setCursor(12, 0);
-            	lcd.print(temperature);
+          
         	}
     	}
     	yield(); // hands control back to the scheduler so other loops can run
