@@ -47,7 +47,7 @@ volatile int samplesRead = 0;
 float highThresh = 2000.0;
 float lowThresh = 800.0;
 volatile bool pirPresence, micPresence;
-
+bool manual = 0;
 
 
 // Display
@@ -103,14 +103,14 @@ void loop()
 		noInterrupts();
 		bool presence = pirPresence || micPresence; 
 		interrupts();
-		if(presence)
+		if(presence && !manual)
 		{	
 			lowLedTemp = LLT1;
 			highLedTemp = HLT1;
 			lowFanTemp = LFT1; 
 			highFanTemp = HFT1;
 		}
-		if(!presence)
+		else if(!presence && !manual)
 		{
 
 			lowLedTemp = LLT2;
@@ -118,6 +118,43 @@ void loop()
 			lowFanTemp = LFT2; 
 			highFanTemp = HFT2;
 
+		}
+		else
+		{
+
+			if (Serial.available())
+			{
+	    	String command = Serial.readStringUntil('\n');
+	    	command.trim(); // removes trailing whitespace/newline characters
+
+	    	// expects format: "SET LLT1 18"
+	    	if (command.startsWith("SET "))
+	    	{
+	        	String body = command.substring(4); // removes "SET ", leaves "LLT1 18"
+	        	int spaceIndex = body.indexOf(' '); // finds the space between variable and value
+	        
+	        	if (spaceIndex != -1)
+	        {
+	            String varName = body.substring(0, spaceIndex); // "LLT1"
+	            int value = body.substring(spaceIndex + 1).toInt(); // "18" -> 18
+
+	            if      (varName == "LLT1") LLT1 = value;
+	            else if (varName == "HLT1") HLT1 = value;
+	            else if (varName == "LLT2") LLT2 = value;
+	            else if (varName == "HLT2") HLT2 = value;
+	            else if (varName == "LFT1") LFT1 = value;
+	            else if (varName == "HFT1") HFT1 = value;
+	            else if (varName == "LFT2") LFT2 = value;
+	            else if (varName == "HFT2") HFT2 = value;
+	            else Serial.println("Unknown variable");
+
+	            Serial.print("Updated "); 
+	            Serial.print(varName); 
+	            Serial.print(" to "); 
+	            Serial.println(value);
+	        	}
+	    	}
+			}
 		}
 
 		// TEMPERATURE PART
