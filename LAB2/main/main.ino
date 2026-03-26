@@ -57,7 +57,7 @@ int heaterPercent = 0;
 int currentScreen = 0;
 
 // MIC Clap
-float clapThresh = 2000.0;
+float clapThresh = 30000.0; // soglia alta per gli applausi
 int nClaps = 2;
 int clapInterval = 3000; // ms
 
