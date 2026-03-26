@@ -161,7 +161,7 @@ void loop()
 
 		int propIncrease;
 		if(temperature != lastTemp) 										// Avoids evaluating ifs if temp stays the same
-		{                                            
+		{   `                                         
 			if(temperature >= highFanTemp) // avoids trying to raise fanspeed above 255
 			{
 				Serial.println("Fan @ max speed");
@@ -208,7 +208,7 @@ void loop()
 	  	lastScreenSwitch = millis();
 	  	currentScreen = (currentScreen + 1) % 4; // cycles 0->1->2->3->0
 	  	lcd.clear();
-	  }
+	  
 	  switch(currentScreen)
 	  {
 	  	case 0:
@@ -252,8 +252,8 @@ void loop()
 	  	break; 
 	  }
 
-                                                                 
-	}
+  }
+}
 
 
 
