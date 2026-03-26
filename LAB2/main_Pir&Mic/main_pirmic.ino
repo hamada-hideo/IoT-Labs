@@ -92,11 +92,18 @@ void loop()
 		if(!presence)
 		{
 		//TEMPERATURE PART with set 2
-		}
+		} 
 
+	noInterrupts();
+	digitalWrite(GLED_PIN,micPresence);
+	Interrupts();
+	
       lastTemp = temperature;
-                                                                 
 	}
+	}
+	
+                                                                 
+	
 
 
 void loopMic()

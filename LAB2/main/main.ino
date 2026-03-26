@@ -82,6 +82,8 @@ void setup()
   	// Pin configuration
   	pinMode(FAN_PIN, OUTPUT);
   	pinMode(PIR_PIN, INPUT);
+  	pinMode(GLED_PIN, OUTPUT);
+
   	
 
   	// LCD init
@@ -258,6 +260,9 @@ void loop()
 	  }
 
   }
+  noInterrupts();
+  digitalWrite(GLED_PIN,micPresence);
+  Interrupts();
 }
 
 
