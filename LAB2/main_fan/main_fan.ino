@@ -18,10 +18,10 @@ const int FAN_PIN = 5; // All we need for the fan is to define the pin, as we'll
 
 int lastTemp = 0;
 int temperature;
-int lowLedTemp = 15; // sets minimum temperature , by which  led bright = 0
-int highLedTemp = 20; // sets maximum temperature, by which led bright = 255
-int lowFanTemp = 20; // sets minimum temperature, by which fanspeed = 0; 
-int highFanTemp = 30; // sets maximum temperature ,by which fanspeed = 255;
+int lowLedTemp; // sets minimum temperature , by which  led bright = 0
+int highLedTemp; // sets maximum temperature, by which led bright = 255
+int lowFanTemp; // sets minimum temperature, by which fanspeed = 0; 
+int highFanTemp; // sets maximum temperature ,by which fanspeed = 255;
 
 
 LiquidCrystal_PCF8574 lcd(0x27); // Init for display
