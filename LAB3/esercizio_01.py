@@ -33,11 +33,11 @@ class SensorServiceQuery(object):
         # Creazione del JSON nel rigoroso formato SenML
         # time.time() genera il timestamp (bt) in formato Unix epoch
         senml_payload = [{
-            "bn": f"{room}/",
-            "n": s_type,
-            "u": self.sensor_types[s_type],
-            "v": val,
-            "bt": time.time() 
+            "room": f"{room}/",
+            "name_sensor": s_type,
+            "unit_of_measurement": self.sensor_types[s_type],
+            "value": val,
+            "base_time": time.time() 
         }]
         
         return json.dumps(senml_payload).encode('utf-8')
