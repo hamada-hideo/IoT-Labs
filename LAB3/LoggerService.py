@@ -1,56 +1,29 @@
 import cherrypy
 import json
+import time
 
 ROOMS = ["living_room", "kitchen", "bedroom"]
+
+def validate_SenML(j):
+    try:
+        if "bn" not in j.keys() or "e" not in j.keys():
+            return False
+        for e in j["e"]:
+            if "n" not in e.keys() or "u" not in e.keys() or "v" not in e.keys():
+                return False
+        return True
+    except Exception as e:
+        return False
 
 class LoggerService():
     exposed = True
 
     def __init__(self):
-        self.logs = [
-            {
-                "id": 0,
-                "epoch": 1777046654.1902337,
-                "bn": "living_room/",
-                "e": [
-                    {
-                        "n": "temperature",
-                        "u": "°C",
-                        "t": 1777046654.1902337,
-                        "v": 25
-                    },
-                    {
-                        "n": "humidity",
-                        "u": "%RH",
-                        "t": 1777046650.1902337,
-                        "v": 50
-                    }
-                ]
-            },
-            {
-                "id": 1,
-                "epoch": 1777046660.1902337,
-                "bn": "kitchen/",
-                "e": [
-                    {
-                        "n": "temperature",
-                        "u": "°C",
-                        "t": 1777046654.1902337,
-                        "v": 30
-                    },
-                    {
-                        "n": "humidity",
-                        "u": "%RH",
-                        "t": 1777046650.1902337,
-                        "v": 60
-                    }
-                ]
-            }
-        ]
+        self.logs = []
+        self.id = 0
 
     def GET(self, *path, **query):
         try:
-            print("yeyyyy")
             room = None
             since = None
             if len(path) == 0:
@@ -73,7 +46,26 @@ class LoggerService():
             raise cherrypy.HTTPError(500, str(e))
 
     def POST(self, *path, **query):
-        raise cherrypy.HTTPError(501, "POST method not implemented")
+        try:
+            data = json.loads(cherrypy.request.body.read())
+            if not validate_SenML(data):
+                raise cherrypy.HTTPError(400, "Wrong SenML format")
+            id = self.id
+            self.id += 1
+            epoch = time.time()
+            self.logs.append({
+                "id": id,
+                "epoch": epoch,
+                "bn": data["bn"],
+                "e": data["e"]
+            })
+            return json.dumps({
+                "message": f"Log added with id = {id} and epoch = {epoch}"
+            }).encode("utf-8")
+        except cherrypy.HTTPError:
+            raise
+        except Exception as e:
+            raise cherrypy.HTTPError(500, str(e))
 
     def PUT(self, *path, **query):
         raise cherrypy.HTTPError(501, "PUT method not implemented")
