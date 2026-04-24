@@ -62,7 +62,7 @@ class LoggerService():
                     except ValueError:
                         raise cherrypy.HTTPError(400, "Timestamp must be a float")
             else:
-                room = path[1]
+                room = path[0]
             if room is not None and room not in ROOMS:
                 raise cherrypy.HTTPError(404, f"Room {room} not found")
             res = [log for log in self.logs if ((room is None or room == log["bn"][:-1]) and (since is None or since <= log["epoch"]))]
