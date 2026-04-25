@@ -26,8 +26,7 @@ class LoggerService():
                 room = path[0]
             if room is not None and room not in ROOMS:
                 raise cherrypy.HTTPError(404, f"Room {room} not found")
-            res = [log for log in self.logs if ((room is None or room == log["bn"][:-1]) and (since is None or since <= log["epoch"]))]
-            return json.dumps(res).encode("utf-8")
+            return json.dumps(self.__get_logs_by_room_and_time__(room, since)).encode("utf-8")
         except cherrypy.HTTPError:
             raise
         except Exception as e:
@@ -69,14 +68,7 @@ class LoggerService():
                 raise cherrypy.HTTPError(400, "Missing before parameter")
             except ValueError:
                 raise cherrypy.HTTPError(400, "Timestamp must be a float")
-            res = []
-            deleted = []
-            for log in self.logs:
-                if log["epoch"] < before:
-                    deleted.append(log["id"])
-                else:
-                    res.append(log)
-            self.logs = res
+            deleted = self.__delete_logs_by_time__(before)
             return json.dumps({
                 "message": f"{len(deleted)} logs deleted with ids = {deleted}"
             }).encode("utf-8")
@@ -84,7 +76,10 @@ class LoggerService():
             raise
         except Exception as e:
             raise cherrypy.HTTPError(500, str(e))
-    
+
+    def __get_logs_by_room_and_time__(self, room = None, since = None):
+        return [log for log in self.logs if ((room is None or room == log["bn"][:-1]) and (since is None or since <= log["epoch"]))]
+
     def __insert_new_log__(self, j):
         id = self.id
         self.id += 1
@@ -96,3 +91,14 @@ class LoggerService():
             "e": j["e"]
         })
         return id
+    
+    def __delete_logs_by_time__(self, before):
+        res = []
+        deleted = []
+        for log in self.logs:
+            if log["epoch"] < before:
+                deleted.append(log["id"])
+            else:
+                res.append(log)
+        self.logs = res
+        return deleted
