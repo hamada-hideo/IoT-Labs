@@ -1,19 +1,7 @@
 import cherrypy
 import json
 import time
-
-ROOMS = ["living_room", "kitchen", "bedroom"]
-
-def validate_SenML(j):
-    try:
-        if "bn" not in j.keys() or "e" not in j.keys():
-            return False
-        for e in j["e"]:
-            if "n" not in e.keys() or "u" not in e.keys() or "v" not in e.keys():
-                return False
-        return True
-    except Exception as e:
-        return False
+from utils import *
 
 class LoggerService():
     exposed = True
@@ -47,20 +35,23 @@ class LoggerService():
 
     def POST(self, *path, **query):
         try:
+            ids = []
             data = json.loads(cherrypy.request.body.read())
-            if not validate_SenML(data):
-                raise cherrypy.HTTPError(400, "Wrong SenML format")
-            id = self.id
-            self.id += 1
-            epoch = time.time()
-            self.logs.append({
-                "id": id,
-                "epoch": epoch,
-                "bn": data["bn"],
-                "e": data["e"]
-            })
+            if isinstance(data, dict):
+                if not validate_SenML(data):
+                    raise cherrypy.HTTPError(400, f"Wrong SenML format: {data}")
+                id = self.__insert_new_log__(data)
+                ids.append(id)
+            elif isinstance(data, list):
+                for j in data:
+                    if not validate_SenML(j):
+                        raise cherrypy.HTTPError(400, f"Wrong SenML format: {j}")
+                    id = self.__insert_new_log__(j)
+                    ids.append(id)
+            else:
+                raise cherrypy.HTTPError(400, "Wrong format, expecting a SenML json or an array of SenML json")
             return json.dumps({
-                "message": f"Log added with id = {id} and epoch = {epoch}"
+                "message": f"{len(ids)} logs added with ids = {ids}",
             }).encode("utf-8")
         except cherrypy.HTTPError:
             raise
@@ -72,3 +63,15 @@ class LoggerService():
 
     def DELETE(self, *path, **query):
         raise cherrypy.HTTPError(501, "DELETE method not implemented")
+    
+    def __insert_new_log__(self, j):
+        id = self.id
+        self.id += 1
+        epoch = time.time()
+        self.logs.append({
+            "id": id,
+            "epoch": epoch,
+            "bn": j["bn"],
+            "e": j["e"]
+        })
+        return id
