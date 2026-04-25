@@ -62,7 +62,28 @@ class LoggerService():
         raise cherrypy.HTTPError(501, "PUT method not implemented")
 
     def DELETE(self, *path, **query):
-        raise cherrypy.HTTPError(501, "DELETE method not implemented")
+        try:
+            try:
+                before = float(query["before"])
+            except KeyError:
+                raise cherrypy.HTTPError(400, "Missing before parameter")
+            except ValueError:
+                raise cherrypy.HTTPError(400, "Timestamp must be a float")
+            res = []
+            deleted = []
+            for log in self.logs:
+                if log["epoch"] < before:
+                    deleted.append(log["id"])
+                else:
+                    res.append(log)
+            self.logs = res
+            return json.dumps({
+                "message": f"{len(deleted)} logs deleted with ids = {deleted}"
+            }).encode("utf-8")
+        except cherrypy.HTTPError:
+            raise
+        except Exception as e:
+            raise cherrypy.HTTPError(500, str(e))
     
     def __insert_new_log__(self, j):
         id = self.id
