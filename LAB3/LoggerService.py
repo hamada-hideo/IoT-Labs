@@ -14,6 +14,7 @@ class LoggerService():
         try:
             room = None
             since = None
+            before = None
             if len(path) == 0:
                 if "room" in query.keys():
                     room = query["room"]
@@ -22,11 +23,16 @@ class LoggerService():
                         since = float(query["since"])
                     except ValueError:
                         raise cherrypy.HTTPError(400, "Timestamp must be a float")
+                if "before" in query.keys():
+                    try:
+                        before = float(query["before"])
+                    except ValueError:
+                        raise cherrypy.HTTPError(400, "Timestamp must be a float")
             else:
                 room = path[0]
             if room is not None and room not in ROOMS:
                 raise cherrypy.HTTPError(404, f"Room {room} not found")
-            return json.dumps(self.__get_logs_by_room_and_time__(room, since)).encode("utf-8")
+            return json.dumps(self.__get_logs_by_room_and_time__(room, since, before)).encode("utf-8")
         except cherrypy.HTTPError:
             raise
         except Exception as e:
@@ -77,8 +83,8 @@ class LoggerService():
         except Exception as e:
             raise cherrypy.HTTPError(500, str(e))
 
-    def __get_logs_by_room_and_time__(self, room = None, since = None):
-        return [log for log in self.logs if ((room is None or room == log["bn"][:-1]) and (since is None or since <= log["epoch"]))]
+    def __get_logs_by_room_and_time__(self, room = None, since = None, before = None):
+        return [log for log in self.logs if ((room is None or room == log["bn"][:-1]) and (since is None or since <= log["bt"]) and (before is None or before > log["bt"]))]
 
     def __insert_new_log__(self, j):
         id = self.id
@@ -88,6 +94,7 @@ class LoggerService():
             "id": id,
             "epoch": epoch,
             "bn": j["bn"],
+            "bt": j["bt"],
             "e": j["e"]
         })
         return id
@@ -96,7 +103,7 @@ class LoggerService():
         res = []
         deleted = []
         for log in self.logs:
-            if log["epoch"] < before:
+            if log["bt"] < before:
                 deleted.append(log["id"])
             else:
                 res.append(log)
