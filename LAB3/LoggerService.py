@@ -18,18 +18,20 @@ class LoggerService():
             if len(path) == 0:
                 if "room" in query.keys():
                     room = query["room"]
-                if "since" in query.keys():
-                    try:
-                        since = float(query["since"])
-                    except ValueError:
-                        raise cherrypy.HTTPError(400, "Timestamp must be a float")
-                if "before" in query.keys():
-                    try:
-                        before = float(query["before"])
-                    except ValueError:
-                        raise cherrypy.HTTPError(400, "Timestamp must be a float")
             else:
+                if "room" in query.keys() and query["room"] != path[0]:
+                    raise cherrypy.HTTPError(400, "Path and query parameter conflict for room selection")
                 room = path[0]
+            if "since" in query.keys():
+                try:
+                    since = float(query["since"])
+                except ValueError:
+                    raise cherrypy.HTTPError(400, "Timestamp must be a float")
+            if "before" in query.keys():
+                try:
+                    before = float(query["before"])
+                except ValueError:
+                    raise cherrypy.HTTPError(400, "Timestamp must be a float")
             if room is not None and room not in ROOMS:
                 raise cherrypy.HTTPError(404, f"Room {room} not found")
             return json.dumps(self.__get_logs_by_room_and_time__(room, since, before)).encode("utf-8")
