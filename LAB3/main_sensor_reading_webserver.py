@@ -1,5 +1,6 @@
 import cherrypy
 from sensor_reading_webserver import SensorReadingWebserver
+
 if __name__ == '__main__':
     conf = {
         '/': {
@@ -12,7 +13,7 @@ if __name__ == '__main__':
     # Montiamo il webserver unificato
     cherrypy.tree.mount(SensorReadingWebserver(), '/sensors', conf)
     
-    cherrypy.config.update({'server.socket_host': '0.0.0.0'})
+    cherrypy.config.update({'server.socket_host': '127.0.0.1'})
     cherrypy.config.update({'server.socket_port': 8080})
     
     cherrypy.engine.start()

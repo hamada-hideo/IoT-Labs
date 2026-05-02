@@ -8,7 +8,7 @@ class SensorReadingWebserver(object):
     
     def __init__(self):
         self.rooms = ["living_room", "kitchen", "bedroom"]
-        self.sensor_types = {"temperature": "Cel", "humidity": "%RH", "motion": "bool"}
+        self.sensor_types = {"temperature": "Cel", "humidity": "%RH", "motion": ""}
 
     def _simulate_value(self, s_type):
         if s_type == "temperature": 
@@ -48,10 +48,10 @@ class SensorReadingWebserver(object):
         # VALIDAZIONI
         # ========================================================
         if req_room and req_room not in self.rooms:
-            raise cherrypy.HTTPError(404, json.dumps({"error": "room not found"}))
+            raise cherrypy.HTTPError(404, json.dumps({"error": "room not found", "available_rooms": self.rooms}))
             
         if req_type and req_type not in self.sensor_types:
-            raise cherrypy.HTTPError(400, json.dumps({"error": "unknown sensor type"}))
+            raise cherrypy.HTTPError(400, json.dumps({"error": "unknown sensor type", "valid_sensor_types": [x for x in self.sensor_types.keys()]}))
 
         # ========================================================
         # GENERAZIONE FORMATO SenML
