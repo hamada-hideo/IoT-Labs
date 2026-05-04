@@ -52,7 +52,6 @@ class SensorReadingWebserver(object):
             for key in params.keys():
                 if key.strip() not in allowed_params:
                     raise cherrypy.HTTPError(400, f"Parametro query non supportato: '{key}'")
-
             if 'room' in params:
                 req_room = params['room'].strip()
             if 'type' in params:
@@ -60,7 +59,6 @@ class SensorReadingWebserver(object):
         # VALIDAZIONI CONTENUTO
         if req_room and req_room not in self.rooms:
             raise cherrypy.HTTPError(404, json.dumps({"error": "room not found"}))
-            
         if req_type and req_type not in self.sensor_types:
             raise cherrypy.HTTPError(400, json.dumps({"error": "unknown sensor type"}))
         # ASSEMBLAGGIO FINALE DEL DOCUMENTO
