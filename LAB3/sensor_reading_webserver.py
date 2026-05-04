@@ -8,6 +8,7 @@ class SensorReadingWebserver(object):
     def __init__(self):
         self.rooms = ["living_room", "kitchen", "bedroom"]
         self.sensor_types = {"temperature": "Cel", "humidity": "%RH", "motion": "bool"}
+
     def _simulate_value(self, s_type):
         if s_type == "temperature": 
             return round(random.uniform(15.0, 30.0), 1)
@@ -16,6 +17,7 @@ class SensorReadingWebserver(object):
         elif s_type == "motion": 
             return random.choice([True, False])
         return 0
+
     # FUNZIONE: Genera l'array degli eventi SenML
     def _generate_senml_events(self, rooms_to_read, sensors_to_read, is_room_specific):
         events = []
@@ -32,6 +34,7 @@ class SensorReadingWebserver(object):
                 })
                 delta_t += 1.0
         return events
+        
     def GET(self, *uri, **params):
         # 1. CASE-SENSITIVE: .strip() per pulire gli spazi
         clean_uri = [u.strip() for u in uri if u.strip() != ""]
