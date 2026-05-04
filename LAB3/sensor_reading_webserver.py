@@ -2,11 +2,13 @@ import cherrypy
 import random
 import time
 import json
+from Globals import *
+import SenMLUtils as SenML
 
 class SensorReadingWebserver(object):
     exposed = True
+    
     def __init__(self):
-        self.rooms = ["living_room", "kitchen", "bedroom"]
         self.sensor_types = {"temperature": "Cel", "humidity": "%RH", "motion": "bool"}
 
     def _simulate_value(self, s_type):
@@ -26,12 +28,7 @@ class SensorReadingWebserver(object):
             for st in sensors_to_read:
                 sensor_name = st if is_room_specific else f"{r}/{st}"
                 val = self._simulate_value(st)
-                events.append({
-                    "n": sensor_name,
-                    "u": self.sensor_types[st],
-                    "t": delta_t,
-                    "v": val
-                })
+                events.append(SenML.build_event_dict(sensor_name, self.sensor_types[st], val, delta_t))
                 delta_t += 1.0
         return events
         
@@ -60,12 +57,12 @@ class SensorReadingWebserver(object):
             if 'type' in params:
                 req_type = params['type'].strip()
         # VALIDAZIONI CONTENUTO
-        if req_room and req_room not in self.rooms:
+        if req_room and req_room not in ROOMS:
             raise cherrypy.HTTPError(404, json.dumps({"error": "room not found"}))
         if req_type and req_type not in self.sensor_types:
             raise cherrypy.HTTPError(400, json.dumps({"error": "unknown sensor type"}))
         # ASSEMBLAGGIO FINALE DEL DOCUMENTO
-        rooms_to_read = [req_room] if req_room else self.rooms
+        rooms_to_read = [req_room] if req_room else ROOMS
         sensors_to_read = [req_type] if req_type else list(self.sensor_types.keys())
         if req_room:
             base_name = f"smart_home/{req_room}/"
@@ -74,9 +71,5 @@ class SensorReadingWebserver(object):
             base_name = "smart_home/"
             is_room_specific = False
         events_array = self._generate_senml_events(rooms_to_read, sensors_to_read, is_room_specific)
-        senml_document = {
-            "bn": base_name,
-            "bt": float(time.time()), 
-            "e": events_array
-        }
+        senml_document = SenML.build_array_dict(base_name, float(time.time()), events_array)
         return json.dumps(senml_document).encode('utf-8')

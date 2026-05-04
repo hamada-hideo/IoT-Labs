@@ -5,8 +5,8 @@ import cherrypy
 #from esercizio_01 import SensorServiceQuery
 #from esercizio_02 import SensorServiceURI
 #from esercizio_03 import ActuatorService
-#from LoggerService import *
-from ex3 import *
+from LoggerService import *
+#from ex3 import *
 
 if __name__ == '__main__':
     # 2. Configurazione obbligatoria per abilitare i verbi HTTP REST (MethodDispatcher)
@@ -25,8 +25,8 @@ if __name__ == '__main__':
     #cherrypy.tree.mount(SensorServiceURI(), '/es2', conf)
     #cherrypy.tree.mount(ActuatorService(), '/es3', conf)
     #cherrypy.tree.mount(SmartHomeEventLog(), '/es4', conf)
-    #cherrypy.tree.mount(LoggerService(), "/log", conf)
-    cherrypy.tree.mount(SmartHomeActuators(), "/rooms", conf)
+    cherrypy.tree.mount(LoggerService(), "/log", conf)
+    #cherrypy.tree.mount(SmartHomeActuators(), "/rooms", conf)
 
     # 4. Impostiamo l'host e la porta
     cherrypy.config.update({'server.socket_host': '127.0.0.1'})
