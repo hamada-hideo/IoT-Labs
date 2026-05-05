@@ -88,9 +88,27 @@ class LoggerService():
     def __get_logs_by_room_and_time__(self, room = None, since = None, before = None):
         res = []
         for log in self.logs:
-            if (room is None or room == log[SenML.BASENAME_KEY].split("/")[-2]) and (since is None or since <= log[SenML.BASETIME_KEY]) and (before is None or before > log[SenML.BASETIME_KEY]):
+            # Usa la funzione dal tuo modulo SenMLUtils
+            flat_events = SenML.flatten_senml(log)
+            
+            keep_log = False
+            for event in flat_events:
+                # Controlla se la stanza è presente nel nome assoluto (bn+n)
+                match_room = (room is None) or (f"/{room}/" in f"/{event['n']}")
+                
+                # Controlla il tempo assoluto dell'evento (bt+t)
+                match_since = (since is None) or (event['t'] >= since)
+                match_before = (before is None) or (event['t'] < before)
+                
+                if match_room and match_since and match_before:
+                    keep_log = True
+                    break # Trovato un evento valido, manteniamo l'intero log SenML
+                    
+            if keep_log:
                 res.append(log)
+                
         return res
+
 
     def __insert_new_log__(self, j):
         id = self.id

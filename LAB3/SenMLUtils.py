@@ -42,3 +42,29 @@ def build_array_dict(basename, basetime, event_array):
         BASETIME_KEY: basetime,
         EVENTS_KEY: event_array
     }
+def flatten_senml(senml_doc):
+    """
+    Prende in input un dizionario SenML e restituisce una lista di eventi "piatti",
+    in cui il base-name (bn) e il base-time (bt) sono stati risolti all'interno 
+    di ogni singolo evento.
+    """
+    flattened_events = []
+    
+    # Estraiamo bn e bt (con valori di default se non presenti)
+    bn = senml_doc.get("bn", "")
+    bt = senml_doc.get("bt", 0.0)
+    
+    for event in senml_doc.get("e", []):
+        n = event.get("n", "")
+        t = event.get("t", 0.0)
+        
+        # Creiamo un evento piatto risolvendo le regole IETF SenML
+        flat_event = {
+            "n": bn + n,      # Nome assoluto della risorsa
+            "t": bt + t,      # Timestamp assoluto dell'evento
+            "v": event.get("v"),
+            "u": event.get("u")
+        }
+        flattened_events.append(flat_event)
+        
+    return flattened_events

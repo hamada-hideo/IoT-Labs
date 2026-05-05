@@ -2,15 +2,13 @@ import cherrypy
 import random
 import time
 import json
+import requests
 from Globals import *
 import SenMLUtils as SenML
 
 class SensorReadingWebserver(object):
     exposed = True
     
-    def __init__(self):
-        self.sensor_types = {"temperature": "Cel", "humidity": "%RH", "motion": "bool"}
-
     def _simulate_value(self, s_type):
         if s_type == "temperature": 
             return round(random.uniform(15.0, 30.0), 1)
@@ -20,7 +18,6 @@ class SensorReadingWebserver(object):
             return random.choice([True, False])
         return 0
 
-    # FUNZIONE: Genera l'array degli eventi SenML
     def _generate_senml_events(self, rooms_to_read, sensors_to_read, is_room_specific):
         events = []
         delta_t = 0.0 
@@ -28,26 +25,23 @@ class SensorReadingWebserver(object):
             for st in sensors_to_read:
                 sensor_name = st if is_room_specific else f"{r}/{st}"
                 val = self._simulate_value(st)
-                events.append(SenML.build_event_dict(sensor_name, self.sensor_types[st], val, delta_t))
+                events.append(SenML.build_event_dict(sensor_name, SENSOR_TYPES[st], val, delta_t))
                 delta_t += 1.0
         return events
         
     def GET(self, *uri, **params):
-        # 1. CASE-SENSITIVE: .strip() per pulire gli spazi
         clean_uri = [u.strip() for u in uri if u.strip() != ""]
         req_room = None
         req_type = None
-        # 2A. STRICT VALIDATION SUL PATH
+
         if len(clean_uri) > 2:
             raise cherrypy.HTTPError(400, "Formato URI errato: troppi segmenti.")
-        # LOGICA URI PATH
+
         if len(clean_uri) > 0:
             req_room = clean_uri[0]
             if len(clean_uri) == 2:
                 req_type = clean_uri[1]
-        # LOGICA QUERY PARAMETERS
         else:
-            # 2B. STRICT VALIDATION SULLE QUERY
             allowed_params = {'room', 'type'}
             for key in params.keys():
                 if key.strip() not in allowed_params:
@@ -56,20 +50,32 @@ class SensorReadingWebserver(object):
                 req_room = params['room'].strip()
             if 'type' in params:
                 req_type = params['type'].strip()
-        # VALIDAZIONI CONTENUTO
+
         if req_room and req_room not in ROOMS:
             raise cherrypy.HTTPError(404, json.dumps({"error": "room not found"}))
-        if req_type and req_type not in self.sensor_types:
+        if req_type and req_type not in SENSOR_TYPES:
             raise cherrypy.HTTPError(400, json.dumps({"error": "unknown sensor type"}))
-        # ASSEMBLAGGIO FINALE DEL DOCUMENTO
+
         rooms_to_read = [req_room] if req_room else ROOMS
-        sensors_to_read = [req_type] if req_type else list(self.sensor_types.keys())
+        sensors_to_read = [req_type] if req_type else list(SENSOR_TYPES.keys())
+        
         if req_room:
             base_name = f"smart_home/{req_room}/"
             is_room_specific = True
         else:
             base_name = "smart_home/"
             is_room_specific = False
+            
         events_array = self._generate_senml_events(rooms_to_read, sensors_to_read, is_room_specific)
         senml_document = SenML.build_array_dict(base_name, float(time.time()), events_array)
+
+        try:
+            # Effettuiamo una POST locale all'endpoint del logger (es. porta 8080)
+            requests.post("http://127.0.0.1:8080/log", json=senml_document, timeout=2)
+        except requests.exceptions.RequestException as e:
+            # Se il logger è spento, stampiamo l'errore su console 
+            # ma non facciamo crashare il server sensori
+            print(f"Attenzione: Impossibile salvare il log. Errore: {e}")
+
+        # Risposta finale al client che ha fatto la GET
         return json.dumps(senml_document).encode('utf-8')
