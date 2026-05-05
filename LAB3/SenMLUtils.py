@@ -9,12 +9,13 @@ VALUE_KEY = "v"
 def validate_SenML(j):
     try:
         k = j.keys()
-        if BASENAME_KEY not in k or EVENTS_KEY not in k or BASETIME_KEY not in k:
+        if EVENTS_KEY not in k:
             return False
-        try:
-            float(j[BASETIME_KEY])
-        except ValueError:
-            return False
+        if BASETIME_KEY in k:
+            try:
+                float(j[BASETIME_KEY])
+            except ValueError:
+                return False
         for e in j[EVENTS_KEY]:
             k = e.keys()
             if NAME_KEY not in k or UNIT_KEY not in k or VALUE_KEY not in k or TIME_KEY not in k:
@@ -36,12 +37,14 @@ def build_event_dict(name, unit, value, time):
         TIME_KEY: time
     }
 
-def build_array_dict(basename, basetime, event_array):
-    return {
-        BASENAME_KEY: basename,
-        BASETIME_KEY: basetime,
-        EVENTS_KEY: event_array
-    }
+def build_array_dict(event_array, basename = None, basetime = None):
+    res = {EVENTS_KEY: event_array}
+    if basename:
+        res[BASENAME_KEY] = basename
+    if basetime:
+        res[BASETIME_KEY] = basetime
+    return res
+
 def flatten_senml(senml_doc):
     """
     Prende in input un dizionario SenML e restituisce una lista di eventi "piatti",

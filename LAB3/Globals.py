@@ -1,3 +1,8 @@
+SENSOR_READING_ACTUATOR_CONTROL_WEBSERVER_IP = "127.0.0.1"
+SENSOR_READING_ACTUATOR_CONTROL_WEBSERVER_PORT = 8080
+LOGGER_WEBSERVICE_IP = "127.0.0.1"
+LOGGER_WEBSERVICE_PORT = 8081
+
 # Elenco delle stanze disponibili nella Smart Home
 ROOMS = ["living_room", "kitchen", "bedroom"]
 

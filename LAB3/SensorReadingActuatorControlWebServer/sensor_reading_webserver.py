@@ -6,7 +6,7 @@ import requests
 from Globals import *
 import SenMLUtils as SenML
 
-class SensorReadingWebserver(object):
+class SensorReadingWebServer(object):
     exposed = True
     
     def _simulate_value(self, s_type):
@@ -67,11 +67,13 @@ class SensorReadingWebserver(object):
             is_room_specific = False
             
         events_array = self._generate_senml_events(rooms_to_read, sensors_to_read, is_room_specific)
-        senml_document = SenML.build_array_dict(base_name, float(time.time()), events_array)
+        senml_document = SenML.build_array_dict(events_array, base_name, float(time.time()))
 
         try:
             # Effettuiamo una POST locale all'endpoint del logger (es. porta 8080)
-            requests.post("http://127.0.0.1:8080/log", json=senml_document, timeout=2)
+            response = requests.post(f"http://{LOGGER_WEBSERVICE_IP}:{LOGGER_WEBSERVICE_PORT}/log", json=senml_document, timeout=2)
+            if response.status_code != 200:
+                print(f"Attenzione: Impossibile salvare il log. Risposta del server: {response.status_code} - {response.text}")
         except requests.exceptions.RequestException as e:
             # Se il logger è spento, stampiamo l'errore su console 
             # ma non facciamo crashare il server sensori
