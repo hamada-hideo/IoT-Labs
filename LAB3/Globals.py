@@ -17,18 +17,60 @@ SENSOR_TYPES = {
 # Modellati come richiesto: termostato in °C, luci come booleano, e tapparelle in %
 INITIAL_ACTUATORS_STATE = {
     "living_room": {
-        "thermostat": {"v": 20.0, "u": "Cel"},
-        "lights": {"v": False, "u": "bool"},
-        "blinds": {"v": 0, "u": "%"}
+        "thermostat": {"v": 20.0, "u": "Cel", "t": 0},
+        "lights": {"v": False, "u": "bool", "t": 0},
+        "blinds": {"v": 0, "u": "%", "t": 0}
     },
     "kitchen": {
-        "thermostat": {"v": 20.0, "u": "Cel"},
-        "lights": {"v": False, "u": "bool"},
-        "blinds": {"v": 0, "u": "%"}
+        "thermostat": {"v": 20.0, "u": "Cel", "t": 0},
+        "lights": {"v": False, "u": "bool", "t": 0},
+        "blinds": {"v": 0, "u": "%", "t": 0}
     },
     "bedroom": {
-        "thermostat": {"v": 20.0, "u": "Cel"},
-        "lights": {"v": False, "u": "bool"},
-        "blinds": {"v": 0, "u": "%"}
+        "thermostat": {"v": 20.0, "u": "Cel", "t": 0},
+        "lights": {"v": False, "u": "bool", "t": 0},
+        "blinds": {"v": 0, "u": "%", "t": 0}
+    }
+}
+
+ACTUATOR_RULES = {
+    "thermostat": {
+        "unit": "Cel",
+        "low": 10,
+        "high": 30,
+        "type": (float, int)
+    },
+    "lights": {
+        "unit": "bool",
+        "low": None,
+        "high": None,
+        "type": bool
+    },
+    "blinds": {
+        "unit": "%",
+        "low": 0,
+        "high": 100,
+        "type": (float, int)
+    }
+}
+
+SENSOR_RULES = {
+    "temperature": {
+        "unit": "Cel",
+        "low": 15,
+        "high": 30,
+        "type": (float, int)
+    },
+    "humidity": {
+        "unit": "%RH",
+        "low": 30,
+        "high": 70,
+        "type": (float, int)
+    },
+    "motion": {
+        "unit": "bool",
+        "low": None,
+        "high": None,
+        "type": bool
     }
 }

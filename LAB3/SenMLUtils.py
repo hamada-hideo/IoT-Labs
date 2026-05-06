@@ -39,9 +39,9 @@ def build_event_dict(name, unit, value, time):
 
 def build_array_dict(event_array, basename = None, basetime = None):
     res = {EVENTS_KEY: event_array}
-    if basename:
+    if basename is not None:
         res[BASENAME_KEY] = basename
-    if basetime:
+    if basetime is not None:
         res[BASETIME_KEY] = basetime
     return res
 

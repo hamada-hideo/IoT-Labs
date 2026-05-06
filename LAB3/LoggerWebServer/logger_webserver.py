@@ -11,6 +11,86 @@ class LoggerWebServer():
         self.logs = []
         self.id = 0
 
+    def _get_room_name(self, senml_name):
+        types = list(SENSOR_RULES.keys()) + list(ACTUATOR_RULES.keys())
+        segments = senml_name.strip().split("/")
+        if segments[0] != "smart_home" or segments[1] not in ROOMS or segments[2] not in types or len(segments) > 3:
+            raise cherrypy.HTTPError(422, "Wrong event name")
+        return segments[1]
+    
+    def _get_type(self, senml_name):
+        types = list(SENSOR_RULES.keys()) + list(ACTUATOR_RULES.keys())
+        segments = senml_name.strip().split("/")
+        if segments[0] != "smart_home" or segments[1] not in ROOMS or segments[2] not in types or len(segments) > 3:
+            raise cherrypy.HTTPError(422, "Wrong event name")
+        return segments[2]
+
+    def _get_logs_by_room_and_time(self, room = None, since = None, before = None):
+        res = []
+        for log in self.logs:
+            event = log[SenML.EVENTS_KEY][0]
+
+            # Controlla se la stanza è presente nel nome assoluto (bn+n)
+            room_name = self._get_room_name(event[SenML.NAME_KEY])
+            match_room = (room is None) or (room_name == room)
+            
+            # Controlla il tempo assoluto dell'evento (bt+t)
+            match_since = (since is None) or (event[SenML.TIME_KEY] >= since)
+            match_before = (before is None) or (event[SenML.TIME_KEY] < before)
+            
+            if match_room and match_since and match_before:
+                res.append(log)
+
+        return res
+    
+    def _validate_specific_event(self, record):
+        device_type = self._get_type(record[SenML.NAME_KEY])
+        rules = SENSOR_RULES | ACTUATOR_RULES
+
+        if device_type not in rules.keys():
+            return False
+        
+        if not isinstance(record[SenML.VALUE_KEY], rules[device_type]["type"]):
+            return False
+        if rules[device_type]["low"] != None and record[SenML.VALUE_KEY] < rules[device_type]["low"]:
+            return False
+        if rules[device_type]["high"] != None and record[SenML.VALUE_KEY] > rules[device_type]["high"]:
+            return False
+        if record[SenML.UNIT_KEY] != rules[device_type]["unit"]:
+            return False
+        
+        return True
+    
+    def _process_SenML(self, senml):
+        # Usa la funzione dal tuo modulo SenMLUtils
+        flat_events = SenML.flatten_senml(senml)
+        
+        ids = []
+        for event in flat_events:
+            if not self._validate_specific_event(event):
+                raise cherrypy.HTTPError(400, "Wrong SenML values")
+            ids.append(self._insert_new_log(SenML.build_array_dict([event])))
+        return ids
+
+    def _insert_new_log(self, j):
+        id = self.id
+        self.id += 1
+        j["epoch"] = time.time()
+        j["id"] = id
+        self.logs.append(j)
+        return id
+    
+    def _delete_logs_by_time(self, before):
+        res = []
+        deleted = []
+        for log in self.logs:
+            if log[SenML.EVENTS_KEY][0][SenML.TIME_KEY] < before:
+                deleted.append(log["id"])
+            else:
+                res.append(log)
+        self.logs = res
+        return deleted
+
     def GET(self, *path, **query):
         room = None
         since = None
@@ -54,14 +134,12 @@ class LoggerWebServer():
         if isinstance(data, dict):
             if not SenML.validate_SenML(data):
                 raise cherrypy.HTTPError(422, f"Wrong SenML format: {data}")
-            id = self._process_SenML(data)
-            ids.append(id)
+            ids.extend(self._process_SenML(data))
         elif isinstance(data, list):
             for j in data:
                 if not SenML.validate_SenML(j):
                     raise cherrypy.HTTPError(422, f"Wrong SenML format: {j}")
-                id = self._process_SenML(j)
-                ids.append(id)
+                ids.extend(self._process_SenML(j))
         else:
             raise cherrypy.HTTPError(400, "Wrong format, expecting a SenML json or an array of SenML json")
         return json.dumps({
@@ -84,49 +162,3 @@ class LoggerWebServer():
         return json.dumps({
             "message": f"{len(deleted)} logs deleted with ids = {deleted}"
         }).encode("utf-8")
-
-    def _get_logs_by_room_and_time(self, room = None, since = None, before = None):
-        res = []
-        for log in self.logs:
-            event = log[SenML.EVENTS_KEY][0]
-
-            # Controlla se la stanza è presente nel nome assoluto (bn+n)
-            segments = event[SenML.NAME_KEY].strip().split("/")
-            if segments[0] != "smart_home" or segments[1] not in ROOMS or segments[2] not in SENSOR_TYPES.keys() or len(segments) > 3:
-                raise cherrypy.HTTPError(422, "Wrong event name")
-            match_room = (room is None) or (segments[1] == room)
-            
-            # Controlla il tempo assoluto dell'evento (bt+t)
-            match_since = (since is None) or (event[SenML.TIME_KEY] >= since)
-            match_before = (before is None) or (event[SenML.TIME_KEY] < before)
-            
-            if match_room and match_since and match_before:
-                res.append(log)
-
-        return res
-    
-    def _process_SenML(self, senml):
-        # Usa la funzione dal tuo modulo SenMLUtils
-        flat_events = SenML.flatten_senml(senml)
-        
-        for event in flat_events:
-            self._insert_new_log(SenML.build_array_dict([event]))
-
-    def _insert_new_log(self, j):
-        id = self.id
-        self.id += 1
-        j["epoch"] = time.time()
-        j["id"] = id
-        self.logs.append(j)
-        return id
-    
-    def _delete_logs_by_time(self, before):
-        res = []
-        deleted = []
-        for log in self.logs:
-            if log[SenML.EVENTS_KEY][0][SenML.TIME_KEY] < before:
-                deleted.append(log["id"])
-            else:
-                res.append(log)
-        self.logs = res
-        return deleted
