@@ -30,7 +30,7 @@ LOGGER_WEBSERVICE_PORT = 8081
 
 1. Host Globale: Nel codice di CherryPy, l'host deve essere impostato su '0.0.0.0' (non su 127.0.0.1 o sull'IP di Tailscale). 
 Questo dice a Python di ascoltare anche sulla rete VPN.
-# Esempio: cherrypy.config.update({'server.socket_host': '0.0.0.0'})
+Esempio: cherrypy.config.update({'server.socket_host': '0.0.0.0'})
 2. Il Firewall di Windows (**FONDAMENTALE**): 
 La prima volta che avvii il file main.py, Windows aprirà una finestra blu del Windows Defender Firewall. Devi assolutamente spuntare le caselle "Reti Private" e "Reti Pubbliche" e cliccare su "Consenti Accesso". 
 Se la chiudi per sbaglio o non metti le spunte, le richieste degli altri colleghi verranno bloccate e andranno in Timeout!
