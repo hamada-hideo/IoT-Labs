@@ -1,6 +1,7 @@
 import cherrypy
 import json
 import time
+import requests
 from Globals import *
 import SenMLUtils as SenML
 
@@ -152,6 +153,16 @@ class ActuatorControlWebServer:
             raise cherrypy.HTTPError(422, f"Wrong SenML format: {data}")
         
         cnt = self._process_SenML(data)
+
+        try:
+            # Effettuiamo una POST locale all'endpoint del logger (es. porta 8080)
+            response = requests.post(f"http://{LOGGER_WEBSERVICE_IP}:{LOGGER_WEBSERVICE_PORT}/log", json=data, timeout=2)
+            if response.status_code != 200:
+                print(f"Attenzione: Impossibile salvare il log. Risposta del server: {response.status_code} - {response.text}")
+        except requests.exceptions.RequestException as e:
+            # Se il logger è spento, stampiamo l'errore su console 
+            # ma non facciamo crashare il server attuatori
+            print(f"Attenzione: Impossibile salvare il log. Errore: {e}")
 
         return json.dumps({
             "message": f"Executed {cnt} commands"
