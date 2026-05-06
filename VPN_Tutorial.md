@@ -17,7 +17,7 @@ Prima di avviare il codice, dobbiamo dire ai nostri script a quali IP di Tailsca
 1. Apri Tailscale per vedere il tuo IP `100.x.x.x` (o guarda la dashboard web per vedere gli IP degli altri colleghi).
 2. Apri il file `Globals.py`.
 3. Assicurati che gli IP corrispondano ai computer che attualmente fanno girare i servizi. Ad esempio:
-```python
+
 # Sostituire con l'IP Tailscale del PC che esegue main.py (Sensori/Attuatori)
 SENSOR_READING_ACTUATOR_CONTROL_WEBSERVER_IP = "100.x.y.z" 
 SENSOR_READING_ACTUATOR_CONTROL_WEBSERVER_PORT = 8080
@@ -25,8 +25,12 @@ SENSOR_READING_ACTUATOR_CONTROL_WEBSERVER_PORT = 8080
 # Sostituire con l'IP Tailscale del PC che esegue main.py (Logger)
 LOGGER_WEBSERVICE_IP = "100.a.b.c" 
 LOGGER_WEBSERVICE_PORT = 8081
+
 3. ⚠️ REGOLE FONDAMENTALI PER I SERVER ⚠️
 
-Host Globale: Nel codice di CherryPy, l'host deve essere impostato su '0.0.0.0' (non su 127.0.0.1 o sull'IP di Tailscale). Questo dice a Python di ascoltare anche sulla rete VPN.
-Esempio: cherrypy.config.update({'server.socket_host': '0.0.0.0'})
-Il Firewall di Windows (FONDAMENTALE): La prima volta che avvii il file main.py, Windows aprirà una finestra blu del Windows Defender Firewall. Devi assolutamente spuntare le caselle "Reti Private" e "Reti Pubbliche" e cliccare su "Consenti Accesso". Se la chiudi per sbaglio o non metti le spunte, le richieste degli altri colleghi verranno bloccate e andranno in Timeout!
+1. Host Globale: Nel codice di CherryPy, l'host deve essere impostato su '0.0.0.0' (non su 127.0.0.1 o sull'IP di Tailscale). 
+Questo dice a Python di ascoltare anche sulla rete VPN.
+# Esempio: cherrypy.config.update({'server.socket_host': '0.0.0.0'})
+2. Il Firewall di Windows (**FONDAMENTALE**): 
+La prima volta che avvii il file main.py, Windows aprirà una finestra blu del Windows Defender Firewall. Devi assolutamente spuntare le caselle "Reti Private" e "Reti Pubbliche" e cliccare su "Consenti Accesso". 
+Se la chiudi per sbaglio o non metti le spunte, le richieste degli altri colleghi verranno bloccate e andranno in Timeout!
