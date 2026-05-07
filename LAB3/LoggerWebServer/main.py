@@ -23,7 +23,7 @@ if __name__ == '__main__':
     cherrypy.tree.mount(LoggerWebServer(), "/log", conf)
 
     # 4. Impostiamo l'host e la porta
-    cherrypy.config.update({'server.socket_host': '0:0:0:0'})
+    cherrypy.config.update({'server.socket_host': '0.0.0.0'})
     cherrypy.config.update({'server.socket_port': LOGGER_WEBSERVICE_PORT})
 
     # 5. Avviamo il server in modalità bloccante
