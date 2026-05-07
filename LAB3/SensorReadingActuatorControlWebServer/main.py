@@ -23,7 +23,7 @@ if __name__ == '__main__':
     cherrypy.tree.mount(SensorReadingWebServer(), '/sensors', conf)
     cherrypy.tree.mount(ActuatorControlWebServer(), '/actuators', conf)
     
-    cherrypy.config.update({'server.socket_host': SENSOR_READING_ACTUATOR_CONTROL_WEBSERVER_IP})
+    cherrypy.config.update({'server.socket_host': '0.0.0.0'})
     cherrypy.config.update({'server.socket_port': SENSOR_READING_ACTUATOR_CONTROL_WEBSERVER_PORT})
     
     cherrypy.engine.start()
