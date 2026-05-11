@@ -1,24 +1,33 @@
 #include <WiFiNINA.h>
 #include <ArduinoHttpClient.h>
+#include <Arduino_LSM6DSOX.h> // Libreria per il sensore di temperatura interno (IMU)
 #include "arduino_secrets.h"
 
 char ssid[] = SECRET_SSID;
 char pass[] = SECRET_PASS;
 
-// Sostituisci con l'indirizzo IP locale del tuo PC dove è in esecuzione il LoggerWebServer 
+// Sostituisci con l'indirizzo IP locale del tuo PC dove è in esecuzione main_logger.py
 char serverAddress[] = ""; 
-int port = 8081; // La porta che abbiamo assegnato nel tuo Globals.py
+int port =; // La porta del LoggerWebServer definita nel tuo Globals.py
 
 WiFiClient wifi;
 HttpClient client = HttpClient(wifi, serverAddress, port);
-const int tempPin = A0;
+
 unsigned long lastExecution = 0;
 
 void setup() {
   Serial.begin(9600);
+  
+  // Inizializzazione del sensore IMU interno
+  if (!IMU.begin()) {
+    Serial.println("Failed to initialize IMU!");
+    while(1);
+  }
+
+  Serial.println("Connessione al Wi-Fi in corso...");
   while (WiFi.begin(ssid, pass) != WL_CONNECTED) {
     delay(5000);
-    Serial.println("Connessione al Wi-Fi in corso...");
+    Serial.println("Tentativo di connessione...");
   }
   Serial.println("Connesso al Wi-Fi!");
 }
@@ -26,16 +35,22 @@ void setup() {
 void loop() {
   unsigned long now = millis();
   
-  // Esegue il task ogni 10 secondi
+  // Esegue il task ogni 10 secondi come richiesto dalle specifiche
   if (now - lastExecution > 10000) {
     lastExecution = now;
     
-    float tempVal = analogRead(tempPin) * 0.48828125; 
+    int tempVal = 0;
+    // Lettura della temperatura dal sensore interno
+    if (IMU.temperatureAvailable()) {
+      IMU.readTemperature(tempVal);
+    }
+    
+    // Costruzione del JSON SenML usando la temperatura letta
     String body = "{\"bn\": \"ArduinoGroup12\", \"e\": [{\"t\": " + String(millis()) + ", \"n\": \"temperature\", \"v\": " + String(tempVal) + ", \"u\": \"Cel\"}]}";
 
     Serial.println("Invio POST a /log con payload: " + body);
 
-    // Creazione della richiesta POST utilizzando HttpClient come da slide
+    // Creazione della richiesta POST utilizzando HttpClient come da slide [1]
     client.beginRequest();
     client.post("/log");
     client.sendHeader("Content-Type", "application/json");
@@ -44,7 +59,7 @@ void loop() {
     client.print(body);
     client.endRequest();
 
-    // Stampa del codice di stato restituito dal server
+    // Lettura e stampa della risposta dal server Python [1]
     int statusCode = client.responseStatusCode();
     String response = client.responseBody();
 

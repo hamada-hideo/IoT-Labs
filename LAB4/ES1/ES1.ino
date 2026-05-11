@@ -1,17 +1,23 @@
 #include <WiFiNINA.h>
+#include <Arduino_LSM6DSOX.h> // Libreria per usare il sensore di temperatura interno (IMU)
 #include "arduino_secrets.h"
 
 char ssid[] = SECRET_SSID;
 char pass[] = SECRET_PASS;
 WiFiServer server(80);
 
-const int ledPin = 2;   // Sostituisci con il pin a cui hai collegato il LED (o LED_BUILTIN)
-const int tempPin = A0; // Sostituisci con il pin del sensore analogico (o sensore interno)
+const int heaterPin = 3; // Il LED che simula l'heater è ora sul pin D3
 
 void setup() {
   Serial.begin(9600);
-  pinMode(ledPin, OUTPUT);
-  digitalWrite(ledPin, LOW);
+  pinMode(heaterPin, OUTPUT);
+  digitalWrite(heaterPin, LOW);
+
+  // Inizializzazione del sensore IMU interno
+  if (!IMU.begin()) {
+    Serial.println("Failed to initialize IMU!");
+    while(1);
+  }
 
   Serial.println("Connessione al Wi-Fi...");
   while (WiFi.begin(ssid, pass) != WL_CONNECTED) {
@@ -27,13 +33,11 @@ void setup() {
 void printResponse(WiFiClient client, int code, String body) {
   client.println("HTTP/1.1 " + String(code));
   if (code == 200) {
-    client.println("Content-type: application/json; charset=utf-8"); // Migliora la formattazione nel browser
-    client.println(); // Riga vuota obbligatoria
+    client.println("Content-type: application/json; charset=utf-8"); 
+    client.println(); 
     client.println(body);
   } else {
-    client.println("Content-type: application/json; charset=utf-8"); // Diciamo che anche l'errore è in formato JSON
-    client.println(); // Riga vuota obbligatoria per chiudere gli header
-    client.println(body); // Stampiamo finalmente il messaggio di errore JSON!
+    client.println();
   }
 }
 
@@ -41,36 +45,38 @@ void loop() {
   WiFiClient client = server.available();
   if (client) {
     if (client.connected()) {
-      // Estrazione del metodo e dell'URL come mostrato nelle slide
+      
       String req_type = client.readStringUntil(' ');
       req_type.trim();
       String url = client.readStringUntil(' ');
       url.trim();
 
-      // Consuma il resto degli header della richiesta HTTP
       while (client.available()) {
         String line = client.readStringUntil('\n');
-        if (line.length() == 1 && line == '\r') { break; }
+        if (line.length() == 1 && line == "\r") { break; }
       }
 
       Serial.println("Ricevuta richiesta " + req_type + " per " + url);
 
-      // Gestione del routing
       if (req_type == "GET") {
         if (url == "/temperature") {
-          // Lettura sensore (esempio fittizio, adatta alla curva del tuo sensore)
-          float tempVal = analogRead(tempPin) * 0.48828125; 
+          int tempVal = 0;
+          // Lettura della temperatura dal sensore IMU interno
+          if (IMU.temperatureAvailable()) {
+            IMU.readTemperature(tempVal);
+          }
+          
           String body = "{\"bn\": \"ArduinoGroup12\", \"e\": [{\"t\": " + String(millis()) + ", \"n\": \"temperature\", \"v\": " + String(tempVal) + ", \"u\": \"Cel\"}]}";
           printResponse(client, 200, body);
           
-        } else if (url == "/led/1") {
-          digitalWrite(ledPin, HIGH);
-          String body = "{\"bn\": \"ArduinoGroup12\", \"e\": [{\"t\": " + String(millis()) + ", \"n\": \"led\", \"v\": 1, \"u\": null}]}";
+        } else if (url == "/heater/1" || url == "/led/1") { // Accetta entrambi gli URI
+          digitalWrite(heaterPin, HIGH);
+          String body = "{\"bn\": \"ArduinoGroup12\", \"e\": [{\"t\": " + String(millis()) + ", \"n\": \"heater\", \"v\": 1, \"u\": null}]}";
           printResponse(client, 200, body);
           
-        } else if (url == "/led/0") {
-          digitalWrite(ledPin, LOW);
-          String body = "{\"bn\": \"ArduinoGroup12\", \"e\": [{\"t\": " + String(millis()) + ", \"n\": \"led\", \"v\": 0, \"u\": null}]}";
+        } else if (url == "/heater/0" || url == "/led/0") { // Accetta entrambi gli URI
+          digitalWrite(heaterPin, LOW);
+          String body = "{\"bn\": \"ArduinoGroup12\", \"e\": [{\"t\": " + String(millis()) + ", \"n\": \"heater\", \"v\": 0, \"u\": null}]}";
           printResponse(client, 200, body);
           
         } else {
