@@ -8,6 +8,8 @@ sys.path.append(BASE_DIR)
 from Globals import *
 from SensorReadingActuatorControlWebServer.sensor_reading_webserver import SensorReadingWebServer
 from SensorReadingActuatorControlWebServer.actuator_control_webserver import ActuatorControlWebServer
+from SensorReadingActuatorControlWebServer.Arduino_sensors_server import ArduinoLogWebServer
+
 
 if __name__ == '__main__':
     conf = {
@@ -22,6 +24,7 @@ if __name__ == '__main__':
     # Montiamo il webserver unificato
     cherrypy.tree.mount(SensorReadingWebServer(), '/sensors', conf)
     cherrypy.tree.mount(ActuatorControlWebServer(), '/actuators', conf)
+    cherrypy.tree.mount(ArduinoLogWebServer(), "/log", conf)
     
     cherrypy.config.update({'server.socket_host': '0.0.0.0'})
     cherrypy.config.update({'server.socket_port': SENSOR_READING_ACTUATOR_CONTROL_WEBSERVER_PORT})
