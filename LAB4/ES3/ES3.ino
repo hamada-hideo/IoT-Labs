@@ -6,10 +6,9 @@
 
 char ssid[] = SECRET_SSID;
 char pass[] = SECRET_PASS;
-const char* broker = "test.mosquitto.org";
+const char* broker = "broker.emqx.io";
 int port = 1883;
 
-// Ricordati di cambiare "groupXX" con il tuo gruppo reale
 const char* topic_pub = "/tiot/group12/temperature";
 const char* topic_sub = "/tiot/group12/led";
 WiFiClient wifiClient;
@@ -17,34 +16,45 @@ PubSubClient mqttClient(wifiClient);
 
 const int heaterPin = 3; // Il LED/Heater spostato sul pin D3
 unsigned long lastMsgTime = 0;
+
+const int capacity = JSON_OBJECT_SIZE(2) + JSON_ARRAY_SIZE(1) + JSON_OBJECT_SIZE(4) + 100;
+DynamicJsonDocument doc_snd(capacity);
+DynamicJsonDocument doc_rec(capacity);
+
 // Callback asincrona eseguita quando arriva un comando SenML in entrata
 void callback(char* topic, byte* payload, unsigned int length) {
-  Serial.print("Messaggio ricevuto sul topic: ");
+  Serial.print("Messaggio (");
+  Serial.print((char*) payload);
+  Serial.print(") ricevuto sul topic: ");
   Serial.println(topic);
-  // Buffer per ArduinoJson per la decodifica sicura
-  StaticJsonDocument<256> doc;
-  DeserializationError error = deserializeJson(doc, payload, length);
+  DeserializationError error = deserializeJson(doc_snd, (char*) payload, length);
   if (error) {
     Serial.print("Formato SenML errato! Errore decodifica: ");
     Serial.println(error.c_str());
     return;
   }
   // Estrazione dell'array "e"
-  JsonArray events = doc["e"];
-  if (!events.isNull() && events.size() > 0) {
-    JsonObject event = events;
+  JsonArray events = doc_snd["e"];
+  if (!events.isNull() && events.size() == 1) {
+    JsonObject event = events[0];
     const char* n = event["n"];
     // Controlliamo che il formato sia corretto e mirato al LED o Heater
     if (n && (String(n) == "led" || String(n) == "heater")) {
       int v = event["v"]; // valore del comando (1 accende, 0 spegne)
-      digitalWrite(heaterPin, v ? HIGH : LOW);
-      Serial.print("Stato Heater (pin D3) aggiornato a: ");
       Serial.println(v);
+      if (v == 0 || v == 1) {
+        digitalWrite(heaterPin, v ? HIGH : LOW);
+        Serial.print("Stato Heater (pin D3) aggiornato a: ");
+        Serial.println(v);
+      } else {
+        Serial.println("Valore errato per il led: " + String(v));
+      }
     } else {
       Serial.println("Nome attuatore 'n' non riconosciuto.");
     }
   }
 }
+
 void setup() {
   Serial.begin(9600);
   pinMode(heaterPin, OUTPUT);
@@ -63,6 +73,7 @@ void setup() {
   mqttClient.setServer(broker, port);
   mqttClient.setCallback(callback);
 }
+
 void reconnect() {
   // Loop finché non siamo connessi
   while (!mqttClient.connected()) {
@@ -81,6 +92,7 @@ void reconnect() {
     }
   }
 }
+
 void loop() {
   if (!mqttClient.connected()) {
     reconnect();
@@ -96,8 +108,20 @@ void loop() {
       IMU.readTemperature(tempVal);
     }
     // Costruzione stringa JSON SenML
-    String payload = "{\"bn\": \"ArduinoGroup12\", \"e\": [{\"t\": " + String(millis()) + ", \"n\": \"temperature\", \"v\": " + String(tempVal) + ", \"u\": \"Cel\"}]}";
+    String payload = senMLEncodeTemperature(tempVal);
     mqttClient.publish(topic_pub, payload.c_str());
-    Serial.println("Messaggio pubblicato: " + payload);
+    Serial.println("Messaggio pubblicato: " + payload + "per il topic: " + topic_pub);
   }
+}
+
+String senMLEncodeTemperature(int val) {
+  doc_snd.clear();
+  doc_snd["bn"] = "ArduinoGroup12";
+  doc_snd["e"][0]["t"] = millis();
+  doc_snd["e"][0]["n"] = "temperature";
+  doc_snd["e"][0]["v"] = val;
+  doc_snd["e"][0]["u"] = "Cel";
+  String output;
+  serializeJson(doc_snd, output);
+  return output;
 }
