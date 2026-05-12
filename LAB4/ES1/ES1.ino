@@ -27,13 +27,9 @@ void setup() {
 }
 void printResponse(WiFiClient client, int code, String body) {
   client.println("HTTP/1.1 " + String(code));
-  if (code == 200) {
-    client.println("Content-type: application/json; charset=utf-8"); 
-    client.println(); 
-    client.println(body);
-  } else {
-    client.println();
-  }
+  client.println("Content-type: application/json; charset=utf-8"); 
+  client.println(); 
+  client.println(body);
 }
 void loop() {
   WiFiClient client = server.available();
@@ -56,23 +52,33 @@ void loop() {
             IMU.readTemperature(tempVal);
           }
           String body = "{\"bn\": \"ArduinoGroup12\", \"e\": [{\"t\": " + String(millis()) + ", \"n\": \"temperature\", \"v\": " + String(tempVal) + ", \"u\": \"Cel\"}]}";
-          printResponse(client, 200, body);
-        } else if (url == "/heater/1" || url == "/led/1") { // Accetta entrambi gli URI
-          digitalWrite(heaterPin, HIGH);
-          String body = "{\"bn\": \"ArduinoGroup12\", \"e\": [{\"t\": " + String(millis()) + ", \"n\": \"heater\", \"v\": 1, \"u\": null}]}";
-          printResponse(client, 200, body);
-        } else if (url == "/heater/0" || url == "/led/0") { // Accetta entrambi gli URI
-          digitalWrite(heaterPin, LOW);
-          String body = "{\"bn\": \"ArduinoGroup12\", \"e\": [{\"t\": " + String(millis()) + ", \"n\": \"heater\", \"v\": 0, \"u\": null}]}";
-          printResponse(client, 200, body);
+          printResponse(client, 200, body);  
+        } else if (url.startsWith("/heater/") || url.startsWith("/led/")) {
+          String led_val = "";
+          if (url.startsWith("/heater/")) { // Accetta entrambi gli URI
+            led_val = url.substring(8);
+          } else if (url.startsWith("/led/")) { // Accetta entrambi gli URI
+            led_val = url.substring(5);
+          } 
+          if (led_val == "0" || led_val == "1") {
+            int int_val = led_val.toInt();
+            digitalWrite(heaterPin, int_val);
+            String body = "{\"bn\": \"ArduinoGroup12\", \"e\": [{\"t\": " + String(millis()) + ", \"n\": \"heater\", \"v\": " + led_val + ", \"u\": null}]}";
+            printResponse(client, 200, body);
+          } else {
+            printResponse(client, 400, "{\"error\": \"Invalid output value: " + led_val + "\"}");
+          }
         } else {
-          printResponse(client, 404, "{\"error\": \"Resource not found\"}");
+          printResponse(client, 404, "{\"error\": \"Resource not found: " + url + "\"}");
         }
       } else {
-        printResponse(client, 400, "{\"error\": \"Method not supported\"}");
+        printResponse(client, 405, "{\"error\": \"Method not supported: " + req_type + "\"}");
       }
     }
     delay(10);
+    while (client.available()) {
+      client.read();
+    }
     client.stop();
   }
 }

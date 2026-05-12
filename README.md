@@ -2,7 +2,7 @@
 
 - [x] Lab01
 - [x] Lab02
-- [ ] Lab03
+- [x] Lab03
 - [ ] Lab04
 - [ ] Lab05
 - [ ] Lab06
