@@ -7,8 +7,8 @@ char ssid[] = SECRET_SSID;
 char pass[] = SECRET_PASS;
 
 // Sostituisci con l'indirizzo IP locale del tuo PC dove è in esecuzione main_logger.py
-char serverAddress[] = ""; 
-int port =; // La porta del LoggerWebServer definita nel tuo Globals.py
+char serverAddress[] = "10.170.134.233"; 
+int port =8080; // La porta del LoggerWebServer definita nel tuo Globals.py
 
 WiFiClient wifi;
 HttpClient client = HttpClient(wifi, serverAddress, port);
@@ -40,7 +40,7 @@ void loop() {
       IMU.readTemperature(tempVal);
     }
     // Costruzione del JSON SenML usando la temperatura letta
-    String body = "{\"bn\": \"ArduinoGroup12\", \"e\": [{\"t\": " + String(millis()) + ", \"n\": \"temperature\", \"v\": " + String(tempVal) + ", \"u\": \"Cel\"}]}";
+    String body = "{\"bn\": \"smart_home/kitchen/\", \"e\": [{\"t\": " + String(millis()) + ", \"n\": \"temperature\", \"v\": " + String(tempVal) + ", \"u\": \"Cel\"}]}";
     Serial.println("Invio POST a /log con payload: " + body);
     // Creazione della richiesta POST utilizzando HttpClient come da slide
     client.beginRequest();

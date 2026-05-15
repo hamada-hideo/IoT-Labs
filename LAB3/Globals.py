@@ -57,8 +57,8 @@ ACTUATOR_RULES = {
 SENSOR_RULES = {
     "temperature": {
         "unit": "Cel",
-        "low": 15,
-        "high": 30,
+        "low": None,
+        "high": None,
         "type": (float, int)
     },
     "humidity": {
