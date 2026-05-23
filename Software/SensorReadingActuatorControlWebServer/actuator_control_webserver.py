@@ -2,8 +2,10 @@ import cherrypy
 import json
 import time
 import requests
+import threading
 from Globals import *
 import SenMLUtils as SenML
+from CatalogClient import *
 
 class ActuatorControlWebServer:
     exposed = True
@@ -12,9 +14,46 @@ class ActuatorControlWebServer:
         # rooms is a dict: { room_name: { device_id: device_dict } }
         self.rooms = INITIAL_ACTUATORS_STATE
 
+        self.ip = SENSOR_READING_ACTUATOR_CONTROL_WEBSERVER_IP
+        self.port = SENSOR_READING_ACTUATOR_CONTROL_WEBSERVER_PORT
+        self.endpoint = ACTUATOR_CONTROL_WEBSERVER_ENDPOINT
+        self.id = "AcutatorControlWebServer"
+
+        self.cc = CatalogClient(CATALOG_IP, CATALOG_PORT, CATALOG_ENDPOINT)
+
+        self.cc.register_service({
+            "id": self.id,
+            "description": "Service that forwards commands to smart home actuators",
+            "rest": {
+                "url": f"http://{self.ip}:{self.port}/{self.endpoint}",
+                "method": ["GET", "POST"]
+            },
+            "resources": self._build_resource_list()
+        })
+
+        threading.Thread(target=self._refresh_loop, daemon=True).start()
+
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    def _build_resource_list(self):
+        res = dict()
+        for room in ROOMS:
+            res[room] = dict()
+            for actuator in ACTUATOR_RULES:
+                res[room][actuator] = {
+                    "type": actuator,
+                    "unit": ACTUATOR_RULES[actuator]["unit"],
+                    "min": ACTUATOR_RULES[actuator]["low"],
+                    "max": ACTUATOR_RULES[actuator]["high"]
+                }
+        return res
+
+    def _refresh_loop(self):
+        while True:
+            time.sleep(CATALOG_EXPIRATION_TIME // 2)
+            self.cc.refresh_service(self.id)
 
     def _get_room_id_device_id(self, senml_name):
         segments = senml_name.strip().split("/")

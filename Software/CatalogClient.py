@@ -29,8 +29,8 @@ class CatalogClient:
             print(f"Warning: Error during {method} request to {url} for {message_spec} functionality, error during request {str(e)}")
         except json.JSONDecodeError:
             print(f"Warning: Error during {method} request to {url} for {message_spec} functionality, response is not a valid json")
-        except:
-            print(f"Warning: Error during {method} request to {url} for {message_spec} functionality")
+        except Exception as e:
+            print(f"Warning: Error during {method} request to {url} for {message_spec} functionality: {str(e)}")
 
     def _get_request_json(self, full_path, message_spec):
         return self._request_json("GET", full_path, message_spec, None)
