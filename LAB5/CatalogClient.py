@@ -1,5 +1,6 @@
 import requests
 import json
+import random
 
 class CatalogClient:
     
@@ -18,6 +19,8 @@ class CatalogClient:
                 response = requests.get(url)
             elif method == "POST":
                 response = requests.post(url, json=data)
+            elif method == "PUT":
+                response = requests.put(url)
             if response.status_code != 200:
                 print(f"Warning: Error during {method} request to {url} for {message_spec} functionality, response status code: {response.status_code}")
                 return
@@ -34,6 +37,9 @@ class CatalogClient:
 
     def _post_request_json(self, full_path, message_spec, data):
         return self._request_json("POST", full_path, message_spec, data)
+
+    def _put_request_json(self, full_path, message_spec):
+        return self._request_json("PUT", full_path, message_spec, None)
 
     def get_catalog(self):
         return self._get_request_json(self.catalog_endpoint, "full catalog")
@@ -60,20 +66,21 @@ class CatalogClient:
         return self._post_request_json(f"{self.catalog_endpoint}/{self.catalog_services_path}", "service registration", payload)
     
     def refresh_device(self, id):
-        return self._post_request_json(f"{self.catalog_endpoint}/{self.catalog_devices_path}", "device refresh", {"id": id})
+        return self._put_request_json(f"{self.catalog_endpoint}/{self.catalog_devices_path}/{id}", "device refresh")
     
     def refresh_service(self, id):
-        return self._post_request_json(f"{self.catalog_endpoint}/{self.catalog_services_path}", "service refresh", {"id": id})
+        return self._put_request_json(f"{self.catalog_endpoint}/{self.catalog_services_path}/{id}", "service refresh")
 
 if __name__ == "__main__":
     cc = CatalogClient()
     print(cc.get_catalog())
     print(cc.get_devices())
     print(cc.get_services())
-    print(cc.get_device("pippo"))
-    print(cc.get_service("pippo"))
+    id =str(random.random())
+    print(cc.register_device({"id": id, "data": "pippo"}))
+    print(cc.register_service({"id": id, "data": "pippo"}))
+    print(cc.get_device(id))
+    print(cc.get_service(id))
     print(cc.get_broker())
-    print(cc.register_device({"data": "pippo"}))
-    print(cc.register_service({"data": "pippo"}))
-    print(cc.refresh_device("pippo"))
-    print(cc.refresh_service("pippo"))
+    print(cc.refresh_device(id))
+    print(cc.refresh_service(id))
