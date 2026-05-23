@@ -11,57 +11,53 @@ class CatalogClient:
         self.catalog_services_path = "services"
         self.catalog_broker_path = "broker"
 
-    def _get_request_json(self, full_path, message_spec):
+    def _request_json(self, method, full_path, message_spec, data):
+        url = f"http://{self.catalog_ip}:{self.catalog_port}/{full_path}"
         try:
-            response = requests.get(f"http://{self.catalog_ip}:{self.catalog_port}/{full_path}")
+            if method == "GET":
+                response = requests.get(url)
+            elif method == "POST":
+                response = requests.post(url, json=data)
             if response.status_code != 200:
-                print(f"Warning: Could not get {message_spec}, status code {response.status_code}")
+                print(f"Warning: Error during {method} request to {url} for {message_spec} functionality, response status code: {response.status_code}")
                 return
             return response.json()
         except requests.exceptions.RequestException as e:
-            print(f"Warning: Could not get {message_spec}, error during request {str(e)}")
+            print(f"Warning: Error during {method} request to {url} for {message_spec} functionality, error during request {str(e)}")
         except json.JSONDecodeError:
-            print(f"Warning: Could not get {message_spec}, not a valid json")
+            print(f"Warning: Error during {method} request to {url} for {message_spec} functionality, response is not a valid json")
         except:
-            print(f"Warning: Could not get {message_spec}")
+            print(f"Warning: Error during {method} request to {url} for {message_spec} functionality")
+
+    def _get_request_json(self, full_path, message_spec):
+        return self._request_json("GET", full_path, message_spec, None)
 
     def _post_request_json(self, full_path, message_spec, data):
-        try:
-            response = requests.post(f"http://{self.catalog_ip}:{self.catalog_port}/{full_path}", json=data)
-            if response.status_code != 200:
-                print(f"Warning: Could not post {message_spec} with data {json.dumps(data).encode("utf-8")}, status code {response.status_code}")
-                return
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            print(f"Warning: Could not post {message_spec} with data {json.dumps(data).encode("utf-8")}, error during request {str(e)}")
-        except json.JSONDecodeError:
-            print(f"Warning: Could not post {message_spec} with data {json.dumps(data).encode("utf-8")}, not a valid json")
-        except:
-            print(f"Warning: Could not post {message_spec} with data {json.dumps(data).encode("utf-8")}")
+        return self._request_json("POST", full_path, message_spec, data)
 
     def get_catalog(self):
-        return self._get_request_json(self.catalog_endpoint, "catalog")
+        return self._get_request_json(self.catalog_endpoint, "full catalog")
     
     def get_devices(self):
-        return self._get_request_json(f"{self.catalog_endpoint}/{self.catalog_devices_path}", "devices")
+        return self._get_request_json(f"{self.catalog_endpoint}/{self.catalog_devices_path}", "devices catalog")
     
     def get_services(self):
-        return self._get_request_json(f"{self.catalog_endpoint}/{self.catalog_services_path}", "services")
+        return self._get_request_json(f"{self.catalog_endpoint}/{self.catalog_services_path}", "services catalog")
     
     def get_device(self, id):
-        return self._get_request_json(f"{self.catalog_endpoint}/{self.catalog_devices_path}/{id}", f"device {id}")
+        return self._get_request_json(f"{self.catalog_endpoint}/{self.catalog_devices_path}/{id}", f"device {id} data")
     
     def get_service(self, id):
-        return self._get_request_json(f"{self.catalog_endpoint}/{self.catalog_services_path}/{id}", f"service {id}")
+        return self._get_request_json(f"{self.catalog_endpoint}/{self.catalog_services_path}/{id}", f"service {id} data")
     
     def get_broker(self):
         return self._get_request_json(f"{self.catalog_endpoint}/{self.catalog_broker_path}", "broker data")
     
     def register_device(self, payload):
-        return self._post_request_json(f"{self.catalog_endpoint}/{self.catalog_devices_path}", "device data", payload)
+        return self._post_request_json(f"{self.catalog_endpoint}/{self.catalog_devices_path}", "device registration", payload)
     
     def register_service(self, payload):
-        return self._post_request_json(f"{self.catalog_endpoint}/{self.catalog_services_path}", "service data", payload)
+        return self._post_request_json(f"{self.catalog_endpoint}/{self.catalog_services_path}", "service registration", payload)
     
     def refresh_device(self, id):
         return self._post_request_json(f"{self.catalog_endpoint}/{self.catalog_devices_path}", "device refresh", {"id": id})
