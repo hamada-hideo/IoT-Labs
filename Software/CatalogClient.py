@@ -4,10 +4,10 @@ import random
 
 class CatalogClient:
     
-    def __init__(self):
-        self.catalog_ip = "127.0.0.1"
-        self.catalog_port = 8080
-        self.catalog_endpoint = "catalog"
+    def __init__(self, ip, port, endpoint):
+        self.catalog_ip = ip
+        self.catalog_port = port
+        self.catalog_endpoint = endpoint
         self.catalog_devices_path = "devices"
         self.catalog_services_path = "services"
         self.catalog_broker_path = "broker"
@@ -22,7 +22,7 @@ class CatalogClient:
             elif method == "PUT":
                 response = requests.put(url)
             if response.status_code != 200:
-                print(f"Warning: Error during {method} request to {url} for {message_spec} functionality, response status code: {response.status_code}")
+                print(f"Warning: Error during {method} request to {url} for {message_spec} functionality, response status code: {response.status_code}\n {response.text}")
                 return
             return response.json()
         except requests.exceptions.RequestException as e:

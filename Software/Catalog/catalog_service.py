@@ -3,6 +3,7 @@ import json
 import threading
 import time
 import os
+from Globals import *
 
 CATALOG_FILE = 'catalog.json'
 
@@ -42,7 +43,7 @@ class Catalog(object):
     def _cleanup_loop(self):
         #Thread che si attiva ogni 60 secondi
         while True:
-            time.sleep(60)
+            time.sleep(CATALOG_EXPIRATION_TIME // 2)
             current_time = time.time()
             with self.lock:
                 cleaned = False
@@ -50,7 +51,7 @@ class Catalog(object):
                     to_delete = []
                     for item_id, info in self.catalog[category].items():
                         #Rimuovere le entry più vecchie di 120 secondi
-                        if current_time -info.get('insert_timestamp', 0) > 120:
+                        if current_time -info.get('insert_timestamp', 0) > CATALOG_EXPIRATION_TIME:
                             to_delete.append(item_id)
                     for item_id in to_delete:
                         del self.catalog[category][item_id]
@@ -128,17 +129,3 @@ class Catalog(object):
             else:
             # Se provano a fare refresh di un device già scaduto/inesistente
                 raise cherrypy.HTTPError(404, f"{item_id} non trovato o scaduto. Necessaria nuova registrazione via POST.")
-    
-if __name__ == '__main__':
-    conf = {
-        '/':{
-            'request.dispatch': cherrypy.dispatch.MethodDispatcher(),
-            'tools.sessions.on': True,
-        }
-    }
-    cherrypy.tree.mount(Catalog(),'/catalog', conf)
-    cherrypy.config.update({'server.socket_host':'0.0.0.0'})
-    cherrypy.config.update({'server.socket_port':8080})
-    print("Start of IoT Catalog on 8080...")
-    cherrypy.engine.start()
-    cherrypy.engine.block()

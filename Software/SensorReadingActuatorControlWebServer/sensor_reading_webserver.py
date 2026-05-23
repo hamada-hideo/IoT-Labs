@@ -3,11 +3,49 @@ import random
 import time
 import json
 import requests
+import threading
 from Globals import *
 import SenMLUtils as SenML
+from CatalogClient import *
 
 class SensorReadingWebServer(object):
     exposed = True
+
+    def __init__(self):
+        self.ip = SENSOR_READING_ACTUATOR_CONTROL_WEBSERVER_IP
+        self.port = SENSOR_READING_ACTUATOR_CONTROL_WEBSERVER_PORT
+        self.endpoint = SENSOR_READING_WEBSERVER_ENDPOINT
+        self.id = "SensorReadingWebServer"
+
+        self.cc = CatalogClient(CATALOG_IP, CATALOG_PORT, CATALOG_ENDPOINT)
+
+        self.cc.register_service({
+            "id": self.id,
+            "description": "Service that exposes reads from the smart home sensors",
+            "rest": {
+                "url": f"http://{self.ip}:{self.port}/{self.endpoint}",
+                "method": "GET"
+            },
+            "resources": self._build_resource_list()
+        })
+
+        threading.Thread(target=self._refresh_loop, daemon=True).start()
+
+    def _build_resource_list(self):
+        res = dict()
+        for room in ROOMS:
+            res[room] = dict()
+            for sensor in SENSOR_TYPES:
+                res[room][sensor] = {
+                    "type": sensor,
+                    "unit": SENSOR_TYPES[sensor]
+                }
+        return res
+    
+    def _refresh_loop(self):
+        while True:
+            time.sleep(CATALOG_EXPIRATION_TIME // 2)
+            self.cc.refresh_service(self.id)
     
     def _simulate_value(self, s_type):
         if s_type == "temperature": 
