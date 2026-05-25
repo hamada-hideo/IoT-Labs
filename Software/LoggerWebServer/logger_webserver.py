@@ -11,7 +11,7 @@ class LoggerWebServer():
 
     def __init__(self):
         self.logs = []
-        self.id = 0
+        self.id_counter = 0
 
         self.ip = LOGGER_WEBSERVICE_IP
         self.port = LOGGER_WEBSERVICE_PORT
@@ -102,8 +102,8 @@ class LoggerWebServer():
         return ids
 
     def _insert_new_log(self, j):
-        id = self.id
-        self.id += 1
+        id = self.id_counter
+        self.id_counter += 1
         j["epoch"] = time.time()
         j["id"] = id
         self.logs.append(j)

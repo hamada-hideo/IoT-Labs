@@ -33,6 +33,8 @@ class ActuatorControlWebServer:
 
         threading.Thread(target=self._refresh_loop, daemon=True).start()
 
+        self.logger_url = self.cc.get_service("LoggerWebServer")["rest"]["url"]
+
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
@@ -195,7 +197,7 @@ class ActuatorControlWebServer:
 
         try:
             # Effettuiamo una POST locale all'endpoint del logger (es. porta 8080)
-            response = requests.post(f"http://{LOGGER_WEBSERVICE_IP}:{LOGGER_WEBSERVICE_PORT}/log", json=data, timeout=2)
+            response = requests.post(self.logger_url, json=data, timeout=2)
             if response.status_code != 200:
                 print(f"Attenzione: Impossibile salvare il log. Risposta del server: {response.status_code} - {response.text}")
         except requests.exceptions.RequestException as e:

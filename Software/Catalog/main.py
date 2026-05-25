@@ -2,11 +2,11 @@ import cherrypy
 import os
 import sys
 import threading # <--- Fondamentale per far girare REST e MQTT insieme
-from Globals import *
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
 
+from Globals import *
 from Catalog.catalog_service import Catalog
 # Importiamo la funzione di avvio del bridge MQTT
 from Catalog.mqtt_catalog_bridge import start_mqtt_bridge
