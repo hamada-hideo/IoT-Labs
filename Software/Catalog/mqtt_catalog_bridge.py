@@ -25,7 +25,7 @@ class MQTTCatalogBridge:
         self.client.on_message = self.on_message
         
         # Scegliamo un topic globale per le registrazioni (definito dal vostro team)
-        self.registration_topic = "polito/iot/catalog/register"
+        self.registration_topic = "group12/tiot/catalog/register"
 
     def on_connect(self, client, userdata, flags, rc):
         if rc == 0:

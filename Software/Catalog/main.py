@@ -2,6 +2,7 @@ import cherrypy
 import os
 import sys
 import threading # <--- Fondamentale per far girare REST e MQTT insieme
+from Globals import *
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
@@ -23,8 +24,8 @@ if __name__ == '__main__':
     
     # 2. Montiamo il catalogo su CherryPy
     cherrypy.tree.mount(catalog_instance, '/catalog', conf)
-    cherrypy.config.update({'server.socket_host': '0.0.0.0'})
-    cherrypy.config.update({'server.socket_port': 8080})
+    cherrypy.config.update({'server.socket_host': '127.0.0.1'})
+    cherrypy.config.update({'server.socket_port': CATALOG_PORT})
     
     # 3. FACCIAMO PARTIRE IL BRIDGE MQTT SU UN THREAD SEPARATO
     # Passiamo l'istanza del catalogo in modo che MQTT e REST lavorino sugli STESSI dati!

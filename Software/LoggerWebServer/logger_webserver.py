@@ -1,8 +1,10 @@
 import cherrypy
 import json
 import time
+import threading
 from Globals import *
 import SenMLUtils as SenML
+from CatalogClient import CatalogClient
 
 class LoggerWebServer():
     exposed = True
@@ -10,6 +12,33 @@ class LoggerWebServer():
     def __init__(self):
         self.logs = []
         self.id = 0
+
+        self.ip = LOGGER_WEBSERVICE_IP
+        self.port = LOGGER_WEBSERVICE_PORT
+        self.endpoint = LOGGER_WEBSERVICE_ENDPOINT
+        self.id = "LoggerWebServer"
+
+        self.cc = CatalogClient(CATALOG_IP, CATALOG_PORT, CATALOG_ENDPOINT)
+
+        self.cc.register_service({
+            "id": self.id,
+            "description": "Service that logs commands sent to actuators and data received from sensors in the smart home",
+            "rest": {
+                "url": f"http://{self.ip}:{self.port}/{self.endpoint}",
+                "method": ["GET", "POST", "DELETE"]
+            },
+            "resources": self._build_resource_list()
+        })
+
+        threading.Thread(target=self._refresh_loop, daemon=True).start()
+
+    def _build_resource_list(self):
+        return ROOMS
+    
+    def _refresh_loop(self):
+        while True:
+            time.sleep(CATALOG_EXPIRATION_TIME // 2)
+            self.cc.refresh_service(self.id)
 
     def _get_room_name(self, senml_name):
         types = list(SENSOR_RULES.keys()) + list(ACTUATOR_RULES.keys())
