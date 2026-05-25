@@ -15,7 +15,7 @@ class Catalog(object):
         self.lock = threading.Lock()
         #struttura base del catalogo che contiene le info del broker al livello root
         self.catalog = {
-            "broker":{"ip": "iot.ecplipse.org","port":1883},
+            "broker":{"ip": "broker.hivemq.com","port":1883},
             "devices":{},
             "services":{}
         }
