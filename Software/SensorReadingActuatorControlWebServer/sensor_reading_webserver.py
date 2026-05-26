@@ -23,10 +23,7 @@ class SensorReadingWebServer(object):
         self.port = port
         self.endpoint = endpoint
         self.id = "SensorReadingWebServer"
-
-        self.cc = CatalogClient()
-
-        self.cc.register_service({
+        self.data = {
             "id": self.id,
             "description": "Service that exposes reads from the smart home sensors",
             "rest": {
@@ -34,11 +31,24 @@ class SensorReadingWebServer(object):
                 "method": "GET"
             },
             "resources": self._build_resource_list()
-        })
+        }
 
-        threading.Thread(target=self.cc.refresh_service_loop, args = (self.id,), daemon=True).start()
+        self.cc = CatalogClient()
 
-        self.logger_url = self.cc.get_service("LoggerWebServer")["rest"]["url"]
+        threading.Thread(target=self.cc.try_register_refresh_loop, args = (self.data, self.id), daemon=True).start()
+
+        self.logger_url_valid = False
+        
+        threading.Thread(target=self._try_get_url, args = ("LoggerWebServer",), daemon=True).start()
+
+    def _try_get_url(self, id):
+        while True:
+            time.sleep(self.cc.loop_time)
+            if not self.logger_url_valid:
+                res = self.cc.get_service(id)
+                if res:
+                    self.logger_url = res["rest"]["url"]
+                    self.logger_url_valid = True
 
     def _build_resource_list(self):
         res = dict()
@@ -111,15 +121,18 @@ class SensorReadingWebServer(object):
         events_array = self._generate_senml_events(rooms_to_read, sensors_to_read, is_room_specific)
         senml_document = SenML.build_array_dict(events_array, base_name, float(time.time()))
 
-        try:
-            # Effettuiamo una POST locale all'endpoint del logger (es. porta 8080)
-            response = requests.post(self.logger_url, json=senml_document, timeout=2)
-            if response.status_code != 200:
-                print(f"Attenzione: Impossibile salvare il log. Risposta del server: {response.status_code} - {response.text}")
-        except requests.exceptions.RequestException as e:
-            # Se il logger è spento, stampiamo l'errore su console 
-            # ma non facciamo crashare il server sensori
-            print(f"Attenzione: Impossibile salvare il log. Errore: {e}")
+        if self.logger_url_valid:
+            try:
+                # Effettuiamo una POST locale all'endpoint del logger (es. porta 8080)
+                response = requests.post(self.logger_url, json=senml_document, timeout=2)
+                if response.status_code != 200:
+                    print(f"Attenzione: Impossibile salvare il log. Risposta del server: {response.status_code} - {response.text}")
+            except requests.exceptions.RequestException as e:
+                # Se il logger è spento, stampiamo l'errore su console 
+                # ma non facciamo crashare il server sensori
+                print(f"Attenzione: Impossibile salvare il log. Errore: {e}")
+        else:
+            print(f"Attenzione: Impossibile salvare il log. Non è stato possibile ottenere l'url del logger.")
 
         # Risposta finale al client che ha fatto la GET
         return json.dumps(senml_document).encode('utf-8')

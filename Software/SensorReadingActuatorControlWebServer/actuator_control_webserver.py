@@ -69,11 +69,22 @@ class ActuatorControlWebServer:
 
         threading.Thread(target=self.cc.refresh_service_loop, args = (self.id,), daemon=True).start()
 
-        self.logger_url = self.cc.get_service("LoggerWebServer")["rest"]["url"]
+        self.logger_url_valid = False
+        
+        threading.Thread(target=self._try_get_url, args = ("LoggerWebServer",), daemon=True).start()
 
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    def _try_get_url(self, id):
+        while True:
+            time.sleep(self.cc.loop_time)
+            if not self.logger_url_valid:
+                res = self.cc.get_service(id)
+                if res:
+                    self.logger_url = res["rest"]["url"]
+                    self.logger_url_valid = True
 
     def _build_resource_list(self):
         res = dict()

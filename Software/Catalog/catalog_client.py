@@ -1,6 +1,5 @@
 import requests
 import json
-import random
 import time
 from Catalog.catalog_info import *
 
@@ -13,6 +12,8 @@ class CatalogClient:
         self.catalog_devices_path = "devices"
         self.catalog_services_path = "services"
         self.catalog_broker_path = "broker"
+        self.loop_time = CATALOG_EXPIRATION_TIME // 2
+        self.registered = False
 
     def _request_json(self, method, full_path, message_spec, data):
         url = f"http://{self.catalog_ip}:{self.catalog_port}/{full_path}"
@@ -69,16 +70,16 @@ class CatalogClient:
     
     def refresh_device(self, id):
         return self._put_request_json(f"{self.catalog_endpoint}/{self.catalog_devices_path}/{id}", "device refresh")
-    
-    def refresh_device_loop(self, id):
-        while True:
-            time.sleep(CATALOG_EXPIRATION_TIME // 2)
-            self.refresh_device(id)
-    
+
     def refresh_service(self, id):
         return self._put_request_json(f"{self.catalog_endpoint}/{self.catalog_services_path}/{id}", "service refresh")
-    
-    def refresh_service_loop(self, id):
+
+    def try_register_refresh_loop(self, payload, id):
         while True:
-            time.sleep(CATALOG_EXPIRATION_TIME // 2)
-            self.refresh_service(id)
+            time.sleep(self.loop_time)
+            if not self.registered:
+                if self.register_service(payload):
+                    self.registered = True
+            else:
+                if not self.refresh_service(id):
+                    self.registered = False

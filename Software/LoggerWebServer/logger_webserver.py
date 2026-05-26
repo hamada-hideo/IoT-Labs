@@ -56,10 +56,7 @@ class LoggerWebServer():
         self.port = port
         self.endpoint = endpoint
         self.id = "LoggerWebServer"
-
-        self.cc = CatalogClient()
-
-        self.cc.register_service({
+        self.data = {
             "id": self.id,
             "description": "Service that logs commands sent to actuators and data received from sensors in the smart home",
             "rest": {
@@ -67,9 +64,11 @@ class LoggerWebServer():
                 "method": ["GET", "POST", "DELETE"]
             },
             "resources": self._build_resource_list()
-        })
+        }
 
-        threading.Thread(target=self.cc.refresh_service_loop, args = (self.id,), daemon=True).start()
+        self.cc = CatalogClient()
+
+        threading.Thread(target=self.cc.try_register_refresh_loop, args = (self.data, self.id), daemon=True).start()
 
     def _build_resource_list(self):
         return self.rooms
