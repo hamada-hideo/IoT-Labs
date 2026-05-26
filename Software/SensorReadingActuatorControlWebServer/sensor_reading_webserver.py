@@ -4,20 +4,27 @@ import time
 import json
 import requests
 import threading
-from Globals import *
 import SenMLUtils as SenML
-from CatalogClient import *
+from Catalog.catalog_client import *
 
 class SensorReadingWebServer(object):
     exposed = True
 
-    def __init__(self):
-        self.ip = SENSOR_READING_ACTUATOR_CONTROL_WEBSERVER_IP
-        self.port = SENSOR_READING_ACTUATOR_CONTROL_WEBSERVER_PORT
-        self.endpoint = SENSOR_READING_WEBSERVER_ENDPOINT
+    def __init__(self, ip, port, endpoint):
+
+        self.rooms = ["living_room", "kitchen", "bedroom"]
+        self.sensor_types = {
+            "temperature": "Cel", 
+            "humidity": "%RH", 
+            "motion": "bool"
+        }
+
+        self.ip = ip
+        self.port = port
+        self.endpoint = endpoint
         self.id = "SensorReadingWebServer"
 
-        self.cc = CatalogClient(CATALOG_IP, CATALOG_PORT, CATALOG_ENDPOINT)
+        self.cc = CatalogClient()
 
         self.cc.register_service({
             "id": self.id,
@@ -29,25 +36,20 @@ class SensorReadingWebServer(object):
             "resources": self._build_resource_list()
         })
 
-        threading.Thread(target=self._refresh_loop, daemon=True).start()
+        threading.Thread(target=self.cc.refresh_service_loop, args = (self.id,), daemon=True).start()
 
         self.logger_url = self.cc.get_service("LoggerWebServer")["rest"]["url"]
 
     def _build_resource_list(self):
         res = dict()
-        for room in ROOMS:
+        for room in self.rooms:
             res[room] = dict()
-            for sensor in SENSOR_TYPES:
+            for sensor in self.sensor_types:
                 res[room][sensor] = {
                     "type": sensor,
-                    "unit": SENSOR_TYPES[sensor]
+                    "unit": self.sensor_types[sensor]
                 }
         return res
-    
-    def _refresh_loop(self):
-        while True:
-            time.sleep(CATALOG_EXPIRATION_TIME // 2)
-            self.cc.refresh_service(self.id)
     
     def _simulate_value(self, s_type):
         if s_type == "temperature": 
@@ -65,7 +67,7 @@ class SensorReadingWebServer(object):
             for st in sensors_to_read:
                 sensor_name = st if is_room_specific else f"{r}/{st}"
                 val = self._simulate_value(st)
-                events.append(SenML.build_event_dict(sensor_name, SENSOR_TYPES[st], val, delta_t))
+                events.append(SenML.build_event_dict(sensor_name, self.sensor_types[st], val, delta_t))
                 delta_t += 1.0
         return events
         
@@ -91,13 +93,13 @@ class SensorReadingWebServer(object):
             if 'type' in params:
                 req_type = params['type'].strip()
 
-        if req_room and req_room not in ROOMS:
+        if req_room and req_room not in self.rooms:
             raise cherrypy.HTTPError(404, json.dumps({"error": "room not found"}))
-        if req_type and req_type not in SENSOR_TYPES:
+        if req_type and req_type not in self.sensor_types:
             raise cherrypy.HTTPError(400, json.dumps({"error": "unknown sensor type"}))
 
-        rooms_to_read = [req_room] if req_room else ROOMS
-        sensors_to_read = [req_type] if req_type else list(SENSOR_TYPES.keys())
+        rooms_to_read = [req_room] if req_room else self.rooms
+        sensors_to_read = [req_type] if req_type else list(self.sensor_types.keys())
         
         if req_room:
             base_name = f"smart_home/{req_room}/"

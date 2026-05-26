@@ -3,7 +3,7 @@ import json
 import threading
 import time
 import os
-from Globals import *
+from Catalog.catalog_info import *
 
 CATALOG_FILE = 'catalog.json'
 

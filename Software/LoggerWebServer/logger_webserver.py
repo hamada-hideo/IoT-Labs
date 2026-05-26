@@ -2,23 +2,62 @@ import cherrypy
 import json
 import time
 import threading
-from Globals import *
 import SenMLUtils as SenML
-from CatalogClient import CatalogClient
+from Catalog.catalog_client import CatalogClient
 
 class LoggerWebServer():
     exposed = True
 
-    def __init__(self):
+    def __init__(self, ip, port, endpoint):
+        self.rooms = ["living_room", "kitchen", "bedroom"]
+        self.rules = {
+            "thermostat": {
+                "unit": "Cel",
+                "low": 10,
+                "high": 30,
+                "type": (float, int)
+            },
+            "lights": {
+                "unit": "bool",
+                "low": None,
+                "high": None,
+                "type": bool
+            },
+            "blinds": {
+                "unit": "%",
+                "low": 0,
+                "high": 100,
+                "type": (float, int)
+            },
+            "temperature": {
+                "unit": "Cel",
+                "low": None,
+                "high": None,
+                "type": (float, int)
+            },
+            "humidity": {
+                "unit": "%RH",
+                "low": 30,
+                "high": 70,
+                "type": (float, int)
+            },
+            "motion": {
+                "unit": "bool",
+                "low": None,
+                "high": None,
+                "type": bool
+            }
+        }
+
         self.logs = []
         self.id_counter = 0
 
-        self.ip = LOGGER_WEBSERVICE_IP
-        self.port = LOGGER_WEBSERVICE_PORT
-        self.endpoint = LOGGER_WEBSERVICE_ENDPOINT
+        self.ip = ip
+        self.port = port
+        self.endpoint = endpoint
         self.id = "LoggerWebServer"
 
-        self.cc = CatalogClient(CATALOG_IP, CATALOG_PORT, CATALOG_ENDPOINT)
+        self.cc = CatalogClient()
 
         self.cc.register_service({
             "id": self.id,
@@ -30,27 +69,20 @@ class LoggerWebServer():
             "resources": self._build_resource_list()
         })
 
-        threading.Thread(target=self._refresh_loop, daemon=True).start()
+        threading.Thread(target=self.cc.refresh_service_loop, args = (self.id,), daemon=True).start()
 
     def _build_resource_list(self):
-        return ROOMS
-    
-    def _refresh_loop(self):
-        while True:
-            time.sleep(CATALOG_EXPIRATION_TIME // 2)
-            self.cc.refresh_service(self.id)
+        return self.rooms
 
     def _get_room_name(self, senml_name):
-        types = list(SENSOR_RULES.keys()) + list(ACTUATOR_RULES.keys())
         segments = senml_name.strip().split("/")
-        if segments[0] != "smart_home" or segments[1] not in ROOMS or segments[2] not in types or len(segments) > 3:
+        if segments[0] != "smart_home" or segments[1] not in self.rooms or segments[2] not in self.rules or len(segments) > 3:
             raise cherrypy.HTTPError(422, "Wrong event name")
         return segments[1]
     
     def _get_type(self, senml_name):
-        types = list(SENSOR_RULES.keys()) + list(ACTUATOR_RULES.keys())
         segments = senml_name.strip().split("/")
-        if segments[0] != "smart_home" or segments[1] not in ROOMS or segments[2] not in types or len(segments) > 3:
+        if segments[0] != "smart_home" or segments[1] not in self.rooms or segments[2] not in self.rules or len(segments) > 3:
             raise cherrypy.HTTPError(422, "Wrong event name")
         return segments[2]
 
@@ -74,18 +106,17 @@ class LoggerWebServer():
     
     def _validate_specific_event(self, record):
         device_type = self._get_type(record[SenML.NAME_KEY])
-        rules = SENSOR_RULES | ACTUATOR_RULES
 
-        if device_type not in rules.keys():
+        if device_type not in self.rules.keys():
             return False
         
-        if not isinstance(record[SenML.VALUE_KEY], rules[device_type]["type"]):
+        if not isinstance(record[SenML.VALUE_KEY], self.rules[device_type]["type"]):
             return False
-        if rules[device_type]["low"] != None and record[SenML.VALUE_KEY] < rules[device_type]["low"]:
+        if self.rules[device_type]["low"] != None and record[SenML.VALUE_KEY] < self.rules[device_type]["low"]:
             return False
-        if rules[device_type]["high"] != None and record[SenML.VALUE_KEY] > rules[device_type]["high"]:
+        if self.rules[device_type]["high"] != None and record[SenML.VALUE_KEY] > self.rules[device_type]["high"]:
             return False
-        if record[SenML.UNIT_KEY] != rules[device_type]["unit"]:
+        if record[SenML.UNIT_KEY] != self.rules[device_type]["unit"]:
             return False
         
         return True
@@ -146,7 +177,7 @@ class LoggerWebServer():
                 before = float(query["before"])
             except ValueError:
                 raise cherrypy.HTTPError(422, "Timestamp must be a float")
-        if room is not None and room not in ROOMS:
+        if room is not None and room not in self.rooms:
             raise cherrypy.HTTPError(404, f"Room {room} not found")
         return json.dumps(self._get_logs_by_room_and_time(room, since, before)).encode("utf-8")
 

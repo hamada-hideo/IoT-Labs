@@ -1,13 +1,15 @@
 import requests
 import json
 import random
+import time
+from Catalog.catalog_info import *
 
 class CatalogClient:
     
-    def __init__(self, ip, port, endpoint):
-        self.catalog_ip = ip
-        self.catalog_port = port
-        self.catalog_endpoint = endpoint
+    def __init__(self):
+        self.catalog_ip = CATALOG_IP
+        self.catalog_port = CATALOG_PORT
+        self.catalog_endpoint = CATALOG_ENDPOINT
         self.catalog_devices_path = "devices"
         self.catalog_services_path = "services"
         self.catalog_broker_path = "broker"
@@ -68,19 +70,15 @@ class CatalogClient:
     def refresh_device(self, id):
         return self._put_request_json(f"{self.catalog_endpoint}/{self.catalog_devices_path}/{id}", "device refresh")
     
+    def refresh_device_loop(self, id):
+        while True:
+            time.sleep(CATALOG_EXPIRATION_TIME // 2)
+            self.refresh_device(id)
+    
     def refresh_service(self, id):
         return self._put_request_json(f"{self.catalog_endpoint}/{self.catalog_services_path}/{id}", "service refresh")
-
-if __name__ == "__main__":
-    cc = CatalogClient()
-    print(cc.get_catalog())
-    print(cc.get_devices())
-    print(cc.get_services())
-    id =str(random.random())
-    print(cc.register_device({"id": id, "data": "pippo"}))
-    print(cc.register_service({"id": id, "data": "pippo"}))
-    print(cc.get_device(id))
-    print(cc.get_service(id))
-    print(cc.get_broker())
-    print(cc.refresh_device(id))
-    print(cc.refresh_service(id))
+    
+    def refresh_service_loop(self, id):
+        while True:
+            time.sleep(CATALOG_EXPIRATION_TIME // 2)
+            self.refresh_service(id)
