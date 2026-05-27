@@ -12,6 +12,7 @@ class SensorReadingWebServer(object):
     exposed = True
 
     def __init__(self):
+        self.devices_list = self._build_devices_list()
         self.ip = SENSOR_READING_ACTUATOR_CONTROL_WEBSERVER_IP
         self.port = SENSOR_READING_ACTUATOR_CONTROL_WEBSERVER_PORT
         self.endpoint = SENSOR_READING_WEBSERVER_ENDPOINT
@@ -29,23 +30,37 @@ class SensorReadingWebServer(object):
             "resources": self._build_resource_list()
         })
 
+        for device in self.devices_list:
+            self.cc.register_device(device)
+
         threading.Thread(target=self._refresh_loop, daemon=True).start()
+
+    def _build_devices_list(self):
+        res = []
+        for room in ROOMS:
+            for sensor in SENSOR_TYPES:
+                res.append({
+                    "id": f"{room}-{sensor}",
+                    "description": f"{sensor} sensor located in room {room}",
+                    "resources": {
+                        "type": sensor,
+                        "unit": SENSOR_TYPES[sensor]
+                    }
+                })
+        return res
 
     def _build_resource_list(self):
         res = dict()
         for room in ROOMS:
-            res[room] = dict()
-            for sensor in SENSOR_TYPES:
-                res[room][sensor] = {
-                    "type": sensor,
-                    "unit": SENSOR_TYPES[sensor]
-                }
+            res[room] = [s for s in SENSOR_TYPES]
         return res
     
     def _refresh_loop(self):
         while True:
             time.sleep(CATALOG_EXPIRATION_TIME // 2)
             self.cc.refresh_service(self.id)
+            for device in self.devices_list:
+                self.cc.refresh_device(device["id"])
     
     def _simulate_value(self, s_type):
         if s_type == "temperature": 

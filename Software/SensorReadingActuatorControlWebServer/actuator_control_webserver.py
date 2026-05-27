@@ -11,6 +11,7 @@ class ActuatorControlWebServer:
     exposed = True
     
     def __init__(self):
+        self.devices_list = self._build_devices_list()
         # rooms is a dict: { room_name: { device_id: device_dict } }
         self.rooms = INITIAL_ACTUATORS_STATE
 
@@ -31,29 +32,43 @@ class ActuatorControlWebServer:
             "resources": self._build_resource_list()
         })
 
+        for device in self.devices_list:
+            self.cc.register_device(device)
+
         threading.Thread(target=self._refresh_loop, daemon=True).start()
 
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
 
+    def _build_devices_list(self):
+        res = []
+        for room in ROOMS:
+            for actuator in ACTUATOR_RULES:
+                res.append({
+                    "id": f"{room}-{actuator}",
+                    "description": f"{actuator} located in room {room}",
+                    "resources": {
+                        "type": actuator,
+                        "unit": ACTUATOR_RULES[actuator]["unit"],
+                        "min": ACTUATOR_RULES[actuator]["low"],
+                        "max": ACTUATOR_RULES[actuator]["high"]
+                    }
+                })
+        return res
+    
     def _build_resource_list(self):
         res = dict()
         for room in ROOMS:
-            res[room] = dict()
-            for actuator in ACTUATOR_RULES:
-                res[room][actuator] = {
-                    "type": actuator,
-                    "unit": ACTUATOR_RULES[actuator]["unit"],
-                    "min": ACTUATOR_RULES[actuator]["low"],
-                    "max": ACTUATOR_RULES[actuator]["high"]
-                }
+            res[room] = [a for a in ACTUATOR_RULES]
         return res
 
     def _refresh_loop(self):
         while True:
             time.sleep(CATALOG_EXPIRATION_TIME // 2)
             self.cc.refresh_service(self.id)
+            for device in self.devices_list:
+                self.cc.refresh_device(device["id"])
 
     def _get_room_id_device_id(self, senml_name):
         segments = senml_name.strip().split("/")
