@@ -9,46 +9,6 @@ class LoggerWebServer():
     exposed = True
 
     def __init__(self, ip, port, endpoint):
-        self.rooms = ["living_room", "kitchen", "bedroom"]
-        self.rules = {
-            "thermostat": {
-                "unit": "Cel",
-                "low": 10,
-                "high": 30,
-                "type": (float, int)
-            },
-            "lights": {
-                "unit": "bool",
-                "low": None,
-                "high": None,
-                "type": bool
-            },
-            "blinds": {
-                "unit": "%",
-                "low": 0,
-                "high": 100,
-                "type": (float, int)
-            },
-            "temperature": {
-                "unit": "Cel",
-                "low": None,
-                "high": None,
-                "type": (float, int)
-            },
-            "humidity": {
-                "unit": "%RH",
-                "low": 30,
-                "high": 70,
-                "type": (float, int)
-            },
-            "motion": {
-                "unit": "bool",
-                "low": None,
-                "high": None,
-                "type": bool
-            }
-        }
-
         self.logs = []
         self.id_counter = 0
 
@@ -62,27 +22,19 @@ class LoggerWebServer():
             "rest": {
                 "url": f"http://{self.ip}:{self.port}/{self.endpoint}",
                 "method": ["GET", "POST", "DELETE"]
-            },
-            "resources": self._build_resource_list()
+            }
         }
 
         self.cc = CatalogClient()
 
         threading.Thread(target=self.cc.try_register_refresh_loop, args = (self.data, self.id), daemon=True).start()
 
-    def _build_resource_list(self):
-        return self.rooms
-
     def _get_room_name(self, senml_name):
         segments = senml_name.strip().split("/")
-        if segments[0] != "smart_home" or segments[1] not in self.rooms or segments[2] not in self.rules or len(segments) > 3:
-            raise cherrypy.HTTPError(422, "Wrong event name")
         return segments[1]
     
     def _get_type(self, senml_name):
         segments = senml_name.strip().split("/")
-        if segments[0] != "smart_home" or segments[1] not in self.rooms or segments[2] not in self.rules or len(segments) > 3:
-            raise cherrypy.HTTPError(422, "Wrong event name")
         return segments[2]
 
     def _get_logs_by_room_and_time(self, room = None, since = None, before = None):
@@ -103,31 +55,12 @@ class LoggerWebServer():
 
         return res
     
-    def _validate_specific_event(self, record):
-        device_type = self._get_type(record[SenML.NAME_KEY])
-
-        if device_type not in self.rules.keys():
-            return False
-        
-        if not isinstance(record[SenML.VALUE_KEY], self.rules[device_type]["type"]):
-            return False
-        if self.rules[device_type]["low"] != None and record[SenML.VALUE_KEY] < self.rules[device_type]["low"]:
-            return False
-        if self.rules[device_type]["high"] != None and record[SenML.VALUE_KEY] > self.rules[device_type]["high"]:
-            return False
-        if record[SenML.UNIT_KEY] != self.rules[device_type]["unit"]:
-            return False
-        
-        return True
-    
     def _process_SenML(self, senml):
         # Usa la funzione dal tuo modulo SenMLUtils
         flat_events = SenML.flatten_senml(senml)
         
         ids = []
         for event in flat_events:
-            if not self._validate_specific_event(event):
-                raise cherrypy.HTTPError(400, "Wrong SenML values")
             ids.append(self._insert_new_log(SenML.build_array_dict([event])))
         return ids
 
@@ -176,8 +109,8 @@ class LoggerWebServer():
                 before = float(query["before"])
             except ValueError:
                 raise cherrypy.HTTPError(422, "Timestamp must be a float")
-        if room is not None and room not in self.rooms:
-            raise cherrypy.HTTPError(404, f"Room {room} not found")
+        if room and not self._get_logs_by_room_and_time(room):
+            raise cherrypy.HTTPError(404, f"Room {room} not found")            
         return json.dumps(self._get_logs_by_room_and_time(room, since, before)).encode("utf-8")
 
     def POST(self, *path, **query):
