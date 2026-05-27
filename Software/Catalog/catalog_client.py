@@ -83,3 +83,12 @@ class CatalogClient:
             else:
                 if not self.refresh_service(id):
                     self.registered = False
+
+    def try_get_url(self, id, callback):
+        while True:
+            time.sleep(self.loop_time)
+            res = self.get_service(id)
+            if res:
+                url = res["rest"]["url"]
+                callback(url)
+                break

@@ -39,16 +39,11 @@ class SensorReadingWebServer(object):
 
         self.logger_url_valid = False
         
-        threading.Thread(target=self._try_get_url, args = ("LoggerWebServer",), daemon=True).start()
+        threading.Thread(target=self.cc.try_get_url, args = ("LoggerWebServer", self._on_logger_url), daemon=True).start()
 
-    def _try_get_url(self, id):
-        while True:
-            time.sleep(self.cc.loop_time)
-            if not self.logger_url_valid:
-                res = self.cc.get_service(id)
-                if res:
-                    self.logger_url = res["rest"]["url"]
-                    self.logger_url_valid = True
+    def _on_logger_url(self, url):
+        self.logger_url = url
+        self.logger_url_valid = True
 
     def _build_resource_list(self):
         res = dict()
@@ -131,6 +126,8 @@ class SensorReadingWebServer(object):
                 # Se il logger è spento, stampiamo l'errore su console 
                 # ma non facciamo crashare il server sensori
                 print(f"Attenzione: Impossibile salvare il log. Errore: {e}")
+                self.logger_url_valid = False
+                threading.Thread(target=self.cc.try_get_url, args = ("LoggerWebServer", self._on_logger_url), daemon=True).start()
         else:
             print(f"Attenzione: Impossibile salvare il log. Non è stato possibile ottenere l'url del logger.")
 
