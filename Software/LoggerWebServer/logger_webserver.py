@@ -27,7 +27,19 @@ class LoggerWebServer():
 
         self.cc = CatalogClient()
 
-        threading.Thread(target=self.cc.try_register_refresh_loop, args = (self.data, self.id), daemon=True).start()
+        self.registered = False
+
+        threading.Thread(target=self._try_register_refresh_loop, args = (self.data, self.id), daemon=True).start()
+
+    def _try_register_refresh_loop(self, payload, id):
+        while True:
+            time.sleep(self.cc.loop_time)
+            if not self.registered:
+                if self.cc.register_service(payload):
+                    self.registered = True
+            else:
+                if not self.cc.refresh_service(id):
+                    self.registered = False
 
     def _get_room_name(self, senml_name):
         segments = senml_name.strip().split("/")

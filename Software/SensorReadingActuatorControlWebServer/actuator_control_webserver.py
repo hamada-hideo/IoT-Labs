@@ -116,7 +116,7 @@ class ActuatorControlWebServer:
 
         self.logger_url_valid = False
         
-        threading.Thread(target=self.cc.try_get_url, args = ("LoggerWebServer", self._on_logger_url), daemon=True).start()
+        threading.Thread(target=self._try_get_logger_url, daemon=True).start()
 
     # ------------------------------------------------------------------
     # Helpers
@@ -139,9 +139,15 @@ class ActuatorControlWebServer:
                     if not self.cc.refresh_device(self.devices_list[i]["device"]["id"]):
                         self.devices_list[i]["registered"] = False
 
-    def _on_logger_url(self, url):
-        self.logger_url = url
-        self.logger_url_valid = True
+    def _try_get_logger_url(self):
+        while True:
+            time.sleep(self.cc.loop_time)
+            res = self.cc.get_service(self.logger_id)
+            if res:
+                url = res["rest"]["url"]
+                self.logger_url = url
+                self.logger_url_valid = True
+                break
 
     def _build_devices_list(self):
         res = []

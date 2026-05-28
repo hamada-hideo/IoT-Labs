@@ -73,22 +73,3 @@ class CatalogClient:
 
     def refresh_service(self, id):
         return self._put_request_json(f"{self.catalog_endpoint}/{self.catalog_services_path}/{id}", "service refresh")
-
-    def try_register_refresh_loop(self, payload, id):
-        while True:
-            time.sleep(self.loop_time)
-            if not self.registered:
-                if self.register_service(payload):
-                    self.registered = True
-            else:
-                if not self.refresh_service(id):
-                    self.registered = False
-
-    def try_get_url(self, id, callback):
-        while True:
-            time.sleep(self.loop_time)
-            res = self.get_service(id)
-            if res:
-                url = res["rest"]["url"]
-                callback(url)
-                break
