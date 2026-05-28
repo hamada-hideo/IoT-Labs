@@ -42,18 +42,12 @@ class MQTTCatalogBridge:
 
     def on_message(self, client, userdata, msg):
         try:
-            # 1. Decodifichiamo il payload JSON ricevuto
+            # 1. Decodifichiamo il payload JSON ricevuto dal dispositivo
             payload = json.loads(msg.payload.decode("utf-8"))
             print(f"\n[MQTT] Ricevuto messaggio su {msg.topic}: {payload}")
 
-            # --- SPOSTATO QUI ALL'INIZIO ---
-            # Se il messaggio arriva sul topic delle query, lo gestiamo subito ed esciamo
-            if msg.topic == self.query_request_topic:
-                self._handle_query(payload)
-                return
-
-            # 2. VALIDAZIONI PER LA REGISTRAZIONE / REFRESH DEI DISPOSITIVI
-            category = payload.get("category", "devices")
+            # Verifichiamo se è un device o un service (il payload deve dirlo, es. "category": "devices")
+            category = payload.get("category", "devices") # default a devices se non specificato
             if category not in ["devices", "services"]:
                 print("[MQTT] Errore: Categoria non valida. Usa 'devices' o 'services'")
                 return
@@ -63,19 +57,26 @@ class MQTTCatalogBridge:
                 print("[MQTT] Errore: Il payload non contiene un 'id'")
                 return
 
-            # 3. STRUTTURA DEL REFRESH O INSERIMENTO (Usando il LOCK del catalogo)
+            # 2. STRUTTURA DEL REFRESH O INSERIMENTO (Usando il LOCK del vostro catalogo)
+            if msg.topic == self.query_request_topic:
+                self._handle_query(payload)
+                return
             with self.catalog_service.lock:
+                # Se il dispositivo esiste già, facciamo solo il REFRESH del timestamp
                 if item_id in self.catalog_service.catalog[category]:
                     self.catalog_service.catalog[category][item_id]['insert_timestamp'] = time.time()
                     print(f"[MQTT] Refresh timestamp effettuato per {item_id}")
                 else:
+                    # Se è nuovo, inseriamo tutto il pacchetto aggiungendo il timestamp iniziale
                     payload['insert_timestamp'] = time.time()
                     self.catalog_service.catalog[category][item_id] = payload
                     print(f"[MQTT] Nuovo {category[:-1]} registrato con successo via MQTT")
 
+                # Sfruttiamo la vostra funzione interna per salvare su file catalog.json
                 self.catalog_service._save_catalog_unsafe()
 
-            # 4. PUBBLICAZIONE DELL'ACKNOWLEDGEMENT (ACK)
+            # 3. PUBBLICAZIONE DELL'ACKNOWLEDGEMENT (ACK)
+            # Inviamo una conferma al topic specifico del dispositivo (richiesto dall'esercizio)
             response_topic = f"/tiot/group12/catalog/ack/{item_id}"
             ack_message = {
                 "status": "success",
@@ -88,6 +89,7 @@ class MQTTCatalogBridge:
             print("[MQTT] Errore: Il messaggio ricevuto non è in un formato JSON valido.")
         except Exception as e:
             print(f"[MQTT] Errore durante l'elaborazione del messaggio: {e}")
+
     def start(self):
         # Il bridge legge l'IP e la porta direttamente dalla memoria del catalogo
         broker_ip = self.catalog_service.catalog["broker"]["ip"]
