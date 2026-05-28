@@ -7,12 +7,14 @@ import os
 import SenMLUtils as SenML
 from Catalog.catalog_client import *
 
+DIR = os.path.dirname(os.path.abspath(__file__))
+
 class ActuatorControlWebServer:
     exposed = True
     
     def __init__(self, ip, port, endpoint):
-        self.config_file = "actuators_config.json"
-        self.state_file = "actuators_state.json"
+        self.config_file = os.path.join(DIR, "actuators_config.json")
+        self.state_file = os.path.join(DIR, "actuators_state.json")
         self._load_data()
 
         self.devices_list = self._build_devices_list()

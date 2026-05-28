@@ -1,17 +1,20 @@
 import cherrypy
 import os
 import sys
+import json
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
+DIR = os.path.dirname(os.path.abspath(__file__))
 
 from LoggerWebServer.logger_webserver import LoggerWebServer
 
-IP = "127.0.0.1"
-PORT = 8082
-ENDPOINT = "log"
-
 if __name__ == '__main__':
+    with open(os.path.join(DIR, "network_config.json")) as f:
+        data = json.load(f)
+    ip = data["ip"]
+    port = data["port"]
+    endpoint = data["endpoint"]
     # 2. Configurazione obbligatoria per abilitare i verbi HTTP REST (MethodDispatcher)
     # e impostare gli header JSON in uscita
     conf = {
@@ -23,11 +26,11 @@ if __name__ == '__main__':
         }
     }
 
-    cherrypy.tree.mount(LoggerWebServer(IP, PORT, ENDPOINT), f"/{ENDPOINT}", conf)
+    cherrypy.tree.mount(LoggerWebServer(ip, port, endpoint), f"/{endpoint}", conf)
 
     # 4. Impostiamo l'host e la porta
     cherrypy.config.update({'server.socket_host': '127.0.0.1'})
-    cherrypy.config.update({'server.socket_port': PORT})
+    cherrypy.config.update({'server.socket_port': port})
 
     # 5. Avviamo il server in modalità bloccante
     cherrypy.engine.start()

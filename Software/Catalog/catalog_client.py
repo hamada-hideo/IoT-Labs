@@ -1,18 +1,22 @@
 import requests
 import json
-import time
-from Catalog.catalog_info import *
+import os
+
+DIR = os.path.dirname(os.path.abspath(__file__))
 
 class CatalogClient:
     
     def __init__(self):
-        self.catalog_ip = CATALOG_IP
-        self.catalog_port = CATALOG_PORT
-        self.catalog_endpoint = CATALOG_ENDPOINT
+        self.config_file = os.path.join(DIR, "network_config.json")
+        with open(self.config_file, "r") as f:
+            data = json.load(f)
+        self.catalog_ip = data["ip"]
+        self.catalog_port = data["port"]
+        self.catalog_endpoint = data["endpoint"]
+        self.loop_time = data["expiration_time"] // 2
         self.catalog_devices_path = "devices"
         self.catalog_services_path = "services"
         self.catalog_broker_path = "broker"
-        self.loop_time = CATALOG_EXPIRATION_TIME // 2
         self.registered = False
 
     def _request_json(self, method, full_path, message_spec, data):

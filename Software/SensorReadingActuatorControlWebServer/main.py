@@ -1,19 +1,22 @@
 import cherrypy
 import os
 import sys
+import json
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
+DIR = os.path.dirname(os.path.abspath(__file__))
 
 from SensorReadingActuatorControlWebServer.sensor_reading_webserver import SensorReadingWebServer
 from SensorReadingActuatorControlWebServer.actuator_control_webserver import ActuatorControlWebServer
 
-IP = "127.0.0.1"
-PORT = 8081
-SENSORS_ENDPOINT = "sensors"
-ACTUATORS_ENDPOINT = "actuators"
-
 if __name__ == '__main__':
+    with open(os.path.join(DIR, "network_config.json")) as f:
+        data = json.load(f)
+    ip = data["ip"]
+    port = data["port"]
+    sensors_endpoint = data["sensors_endpoint"]
+    actuators_endpoint = data["actuators_endpoint"]
     conf = {
         '/': {
             'request.dispatch': cherrypy.dispatch.MethodDispatcher(),
@@ -23,11 +26,11 @@ if __name__ == '__main__':
         }
     }
     # Montiamo il webserver unificato
-    cherrypy.tree.mount(SensorReadingWebServer(IP, PORT, SENSORS_ENDPOINT), f'/{SENSORS_ENDPOINT}', conf)
-    cherrypy.tree.mount(ActuatorControlWebServer(IP, PORT, ACTUATORS_ENDPOINT), f'/{ACTUATORS_ENDPOINT}', conf)
+    cherrypy.tree.mount(SensorReadingWebServer(ip, port, sensors_endpoint), f'/{sensors_endpoint}', conf)
+    cherrypy.tree.mount(ActuatorControlWebServer(ip, port, actuators_endpoint), f'/{actuators_endpoint}', conf)
     
     cherrypy.config.update({'server.socket_host': '127.0.0.1'})
-    cherrypy.config.update({'server.socket_port': PORT})
+    cherrypy.config.update({'server.socket_port': port})
     
     cherrypy.engine.start()
     cherrypy.engine.block()

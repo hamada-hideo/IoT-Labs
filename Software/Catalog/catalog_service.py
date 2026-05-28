@@ -3,14 +3,17 @@ import json
 import threading
 import time
 import os
-from Catalog.catalog_info import *
 
-CATALOG_FILE = 'catalog.json'
+DIR = os.path.dirname(os.path.abspath(__file__))
+CATALOG_FILE = os.path.join(DIR, 'catalog.json')
 
 class Catalog(object):
     exposed = True
 
     def __init__(self):
+        self.config_file = os.path.join(DIR, "network_config.json")
+        with open(self.config_file, "r") as f:
+            self.cleanup_time = json.load(f)["expiration_time"]
         # Utilizzo un Lock per evitare race conditions durante lettura/scrittura
         self.lock = threading.Lock()
         # Struttura base del catalogo
@@ -54,7 +57,7 @@ class Catalog(object):
     def _cleanup_loop(self):
         # Thread che si attiva ciclicamente
         while True:
-            time.sleep(CATALOG_EXPIRATION_TIME // 2)
+            time.sleep(self.cleanup_time // 2)
             current_time = time.time()
             with self.lock:
                 cleaned = False
@@ -62,7 +65,7 @@ class Catalog(object):
                     to_delete = []
                     for item_id, info in self.catalog[category].items():
                         # Rimuovere le entry più vecchie del tempo di espirazione
-                        if current_time - info.get('insert_timestamp', 0) > CATALOG_EXPIRATION_TIME:
+                        if current_time - info.get('insert_timestamp', 0) > self.cleanup_time:
                             to_delete.append(item_id)     
                     for item_id in to_delete:
                         del self.catalog[category][item_id]

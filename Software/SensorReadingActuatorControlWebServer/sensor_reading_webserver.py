@@ -4,15 +4,18 @@ import time
 import json
 import requests
 import threading
+import os
 import SenMLUtils as SenML
 from Catalog.catalog_client import *
+
+DIR = os.path.dirname(os.path.abspath(__file__))
 
 class SensorReadingWebServer(object):
     exposed = True
 
     def __init__(self, ip, port, endpoint):
 
-        with open("sensors_config.json", "r") as f:
+        with open(os.path.join(DIR, "sensors_config.json"), "r") as f:
             self.resources = json.load(f)
         self.sensor_types = self._build_sensor_types()
         self.devices_list = self._build_devices_list()
