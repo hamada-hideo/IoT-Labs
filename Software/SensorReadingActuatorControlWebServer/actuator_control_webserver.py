@@ -99,8 +99,6 @@ class ActuatorControlWebServer:
         self.endpoint = endpoint
         self.id = "AcutatorControlWebServer"
 
-        self.cc = CatalogClient()
-
         self.data = {
             "id": self.id,
             "description": "Service that forwards commands to smart home actuators",
@@ -110,12 +108,11 @@ class ActuatorControlWebServer:
             },
             "resources": self._build_resource_list()
         }
+        self.registered = False
 
-        self.cc.register_service(self.data)
-        for device in self.devices_list:
-            self.cc.register_device(device)
+        self.cc = CatalogClient()
 
-        threading.Thread(target=self._refresh_loop, daemon=True).start()
+        threading.Thread(target=self._try_register_refresh_loop, daemon=True).start()
 
         self.logger_url_valid = False
         
@@ -124,6 +121,23 @@ class ActuatorControlWebServer:
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    def _try_register_refresh_loop(self):
+        while True:
+            time.sleep(self.cc.loop_time)
+            if not self.registered:
+                if self.cc.register_service(self.data):
+                    self.registered = True
+            else:
+                if not self.cc.refresh_service(self.id):
+                    self.registered = False
+            for i in range(len(self.devices_list)):
+                if not self.devices_list[i]["registered"]:
+                    if self.cc.register_device(self.devices_list[i]["device"]):
+                        self.devices_list[i]["registered"] = True
+                else:
+                    if not self.cc.refresh_device(self.devices_list[i]["device"]["id"]):
+                        self.devices_list[i]["registered"] = False
 
     def _on_logger_url(self, url):
         self.logger_url = url
@@ -134,14 +148,17 @@ class ActuatorControlWebServer:
         for room in self.state:
             for actuator in self.state[room]:
                 res.append({
-                    "id": f"{room}-{actuator}",
-                    "description": f"{actuator} located in room {room}",
-                    "resources": {
-                        "type": actuator,
-                        "unit": self.rules[self.state[room][actuator]["type"]]["unit"],
-                        "min": self.rules[self.state[room][actuator]["type"]]["low"],
-                        "max": self.rules[self.state[room][actuator]["type"]]["high"]
-                    }
+                    "device": {
+                        "id": f"{room}-{actuator}",
+                        "description": f"{actuator} located in room {room}",
+                        "resources": {
+                            "type": actuator,
+                            "unit": self.rules[self.state[room][actuator]["type"]]["unit"],
+                            "min": self.rules[self.state[room][actuator]["type"]]["low"],
+                            "max": self.rules[self.state[room][actuator]["type"]]["high"]
+                        }
+                    },
+                    "registered": False
                 })
         return res
     

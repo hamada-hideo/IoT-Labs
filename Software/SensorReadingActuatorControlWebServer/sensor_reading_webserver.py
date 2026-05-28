@@ -56,6 +56,7 @@ class SensorReadingWebServer(object):
                 }
             }
         }
+        self.sensor_types = self._build_sensor_types()
         self.devices_list = self._build_devices_list()
 
         self.ip = ip
@@ -71,31 +72,55 @@ class SensorReadingWebServer(object):
             },
             "resources": self._build_resource_list()
         }
+        self.registered = False
 
         self.cc = CatalogClient()
 
-        self.cc.register_service(self.data)
-        for device in self.devices_list:
-            self.cc.register_device(device)
-
-        threading.Thread(target=self._refresh_loop, daemon=True).start()
+        threading.Thread(target=self._try_register_refresh_loop, daemon=True).start()
 
         self.logger_url_valid = False
         
         threading.Thread(target=self.cc.try_get_url, args = ("LoggerWebServer", self._on_logger_url), daemon=True).start()
 
+    def _try_register_refresh_loop(self):
+        while True:
+            time.sleep(self.cc.loop_time)
+            if not self.registered:
+                if self.cc.register_service(self.data):
+                    self.registered = True
+            else:
+                if not self.cc.refresh_service(self.id):
+                    self.registered = False
+            for i in range(len(self.devices_list)):
+                if not self.devices_list[i]["registered"]:
+                    if self.cc.register_device(self.devices_list[i]["device"]):
+                        self.devices_list[i]["registered"] = True
+                else:
+                    if not self.cc.refresh_device(self.devices_list[i]["device"]["id"]):
+                        self.devices_list[i]["registered"] = False
+
     def _on_logger_url(self, url):
         self.logger_url = url
         self.logger_url_valid = True
+
+    def _build_sensor_types(self):
+        res = set()
+        for room in self.resources:
+            for sensor in self.resources[room]:
+                res.add(self.resources[room][sensor]["type"])
+        return [t for t in res]
 
     def _build_devices_list(self):
         res = []
         for room in self.resources:
             for sensor in self.resources[room]:
                 res.append({
-                    "id": f"{room}-{sensor}",
-                    "description": f"{sensor} sensor located in room {room}",
-                    "resources": self.resources[room][sensor]
+                    "device": {
+                        "id": f"{room}-{sensor}",
+                        "description": f"{sensor} sensor located in room {room}",
+                        "resources": self.resources[room][sensor]
+                    },
+                    "registered": False
                 })
         return res
 
@@ -104,13 +129,6 @@ class SensorReadingWebServer(object):
         for room in self.resources:
             res[room] = [s for s in self.resources[room]]
         return res
-    
-    def _refresh_loop(self):
-        while True:
-            time.sleep(CATALOG_EXPIRATION_TIME // 2)
-            self.cc.refresh_service(self.id)
-            for device in self.devices_list:
-                self.cc.refresh_device(device["id"])
     
     def _simulate_value(self, s_type):
         if s_type == "temperature": 
@@ -126,10 +144,12 @@ class SensorReadingWebServer(object):
         delta_t = 0.0 
         for r in rooms_to_read:
             for st in sensors_to_read:
-                sensor_name = st if is_room_specific else f"{r}/{st}"
-                val = self._simulate_value(st)
-                events.append(SenML.build_event_dict(sensor_name, self.sensor_types[st], val, delta_t))
-                delta_t += 1.0
+                for sensor in self.resources[r]:
+                    if self.resources[r][sensor]["type"] == st:
+                        sensor_name = sensor if is_room_specific else f"{r}/{sensor}"
+                        val = self._simulate_value(st)
+                        events.append(SenML.build_event_dict(sensor_name, self.resources[r][sensor]["unit"], val, delta_t))
+                        delta_t += 1.0
         return events
         
     def GET(self, *uri, **params):
@@ -154,13 +174,15 @@ class SensorReadingWebServer(object):
             if 'type' in params:
                 req_type = params['type'].strip()
 
-        if req_room and req_room not in self.rooms:
+        if req_room and req_room not in self.resources:
             raise cherrypy.HTTPError(404, json.dumps({"error": "room not found"}))
         if req_type and req_type not in self.sensor_types:
             raise cherrypy.HTTPError(400, json.dumps({"error": "unknown sensor type"}))
+        if req_room and req_type and req_type not in [self.resources[req_room][s]["type"] for s in self.resources[req_room]]:
+            raise cherrypy.HTTPError(404, json.dumps({"error": "no sensors of the given type in the given room"}))
 
-        rooms_to_read = [req_room] if req_room else self.rooms
-        sensors_to_read = [req_type] if req_type else list(self.sensor_types.keys())
+        rooms_to_read = [req_room] if req_room else [r for r in self.resources]
+        sensors_to_read = [req_type] if req_type else self.sensor_types
         
         if req_room:
             base_name = f"smart_home/{req_room}/"

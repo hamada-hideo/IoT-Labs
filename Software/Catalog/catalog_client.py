@@ -25,7 +25,7 @@ class CatalogClient:
             elif method == "PUT":
                 response = requests.put(url)
             if response.status_code != 200:
-                print(f"Warning: Error during {method} request to {url} for {message_spec} functionality, response status code: {response.status_code}\n {response.text}")
+                print(f"Warning: Error during {method} request to {url} for {message_spec} functionality, response status code: {response.status_code}\n")
                 return
             return response.json()
         except requests.exceptions.RequestException as e:
