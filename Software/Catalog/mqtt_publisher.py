@@ -8,7 +8,7 @@ from CatalogClient import CatalogClient
 
 
 
-HOST = "iot.eclipse.org"
+HOST = "broker.hivemq.com"
 PORT = 1883
 PUBLISH_TOPIC = "/tiot/group12/temperature"
 COMMAND_TOPIC = "/tiot/group12/temperature/config"
@@ -114,7 +114,7 @@ class TemperaturePublisher():
                 print(f"[{time.strftime('%X')}] Registration refreshed for {self.client_id}")
             else:
                 print(f"[{time.strftime('%X')}] Refresh failed, retrying next cycle")
-            time.sleep(60)
+            time.sleep(10)
 
     def run(self):
         self.client.loop_start()
