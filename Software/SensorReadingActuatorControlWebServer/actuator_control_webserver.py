@@ -3,6 +3,7 @@ import json
 import time
 import requests
 import threading
+import os
 import SenMLUtils as SenML
 from Catalog.catalog_client import *
 
@@ -10,94 +11,17 @@ class ActuatorControlWebServer:
     exposed = True
     
     def __init__(self, ip, port, endpoint):
-        self.rules = {
-            "thermostat": {
-                "unit": "Cel",
-                "low": 10,
-                "high": 30,
-                "type": (float, int)
-            },
-            "lights": {
-                "unit": "bool",
-                "low": None,
-                "high": None,
-                "type": bool
-            },
-            "blinds": {
-                "unit": "%",
-                "low": 0,
-                "high": 100,
-                "type": (float, int)
-            }
-        }
-        self.state = {
-            "living_room": {
-                "thermostat": {
-                    "type": "thermostat",
-                    "v": 20.0, 
-                    "u": "Cel",
-                    "t": 0
-                },
-                "lights": {
-                    "type": "lights",
-                    "v": False,
-                    "u": "bool",
-                    "t": 0
-                },
-                "blinds": {
-                    "type": "blinds",
-                    "v": 0,
-                    "u": "%",
-                    "t": 0
-                }
-            },
-            "kitchen": {
-                "thermostat": {
-                    "type": "thermostat",
-                    "v": 20.0, 
-                    "u": "Cel",
-                    "t": 0
-                },
-                "lights": {
-                    "type": "lights",
-                    "v": False,
-                    "u": "bool",
-                    "t": 0
-                },
-                "blinds": {
-                    "type": "blinds",
-                    "v": 0,
-                    "u": "%",
-                    "t": 0
-                }
-            },
-            "bedroom": {
-                "thermostat": {
-                    "type": "thermostat",
-                    "v": 20.0, 
-                    "u": "Cel",
-                    "t": 0
-                },
-                "lights": {
-                    "type": "lights",
-                    "v": False,
-                    "u": "bool",
-                    "t": 0
-                },
-                "blinds": {
-                    "type": "blinds",
-                    "v": 0,
-                    "u": "%",
-                    "t": 0
-                }
-            }
-        }
+        self.config_file = "actuators_config.json"
+        self.state_file = "actuators_state.json"
+        self._load_data()
+
         self.devices_list = self._build_devices_list()
 
         self.ip = ip
         self.port = port
         self.endpoint = endpoint
         self.id = "ActuatorControlWebServer"
+        self.logger_id = "LoggerWebServer"
 
         self.data = {
             "id": self.id,
@@ -121,6 +45,53 @@ class ActuatorControlWebServer:
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    def _load_data(self):
+        with open(self.config_file, "r") as f:
+            data = json.load(f)
+            self.rules = data["rules"]
+            config_state = data["initial_state"]
+        to_overwrite = False
+        if os.path.exists(self.state_file):
+            try:
+                with open(self.state_file, "r") as f:
+                    self.state = json.load(f)
+                if not self._validate_state(config_state):
+                    to_overwrite = True
+            except json.JSONDecodeError:
+                to_overwrite = True
+        else:
+            to_overwrite = True
+        if to_overwrite:
+            self.state = config_state
+            with open(self.state_file, "w") as f:
+                json.dump(self.state, f, indent=4)
+
+    def _validate_state(self, reference):
+        for room in self.state:
+            if room not in reference:
+                return False
+        for room in reference:
+            if room not in self.state:
+                return False
+        for room in self.state:
+            for device in self.state[room]:
+                if device not in reference[room]:
+                    return False
+            for device in reference[room]:
+                if device not in self.state[room]:
+                    return False
+        for room in self.state:
+            for device in self.state[room]:
+                if self.state[room][device]["type"] not in self.rules:
+                    return False
+                if self.state[room][device]["u"] != self.rules[self.state[room][device]["type"]]["unit"]:
+                    return False
+                if self.rules[self.state[room][device]["type"]]["low"] is not None and self.state[room][device]["v"] < self.rules[self.state[room][device]["type"]]["low"]:
+                    return False
+                if self.rules[self.state[room][device]["type"]]["high"] is not None and self.state[room][device]["v"] > self.rules[self.state[room][device]["type"]]["high"]:
+                    return False
+        return True
 
     def _try_register_refresh_loop(self):
         while True:
@@ -188,8 +159,6 @@ class ActuatorControlWebServer:
         if device_type not in self.rules:
             return False
         
-        if not isinstance(record[SenML.VALUE_KEY], self.rules[device_type]["type"]):
-            return False
         if self.rules[device_type]["low"] != None and record[SenML.VALUE_KEY] < self.rules[device_type]["low"]:
             return False
         if self.rules[device_type]["high"] != None and record[SenML.VALUE_KEY] > self.rules[device_type]["high"]:
@@ -238,6 +207,8 @@ class ActuatorControlWebServer:
         room_id, device_id = self._get_room_id_device_id(command[SenML.NAME_KEY])
         self.state[room_id][device_id]["v"] = command[SenML.VALUE_KEY]
         self.state[room_id][device_id]["t"] = time.time()
+        with open(self.state_file, "w") as f:
+            json.dump(self.state, f, indent=4)
 
     def _process_SenML(self, senml):
         # Usa la funzione dal tuo modulo SenMLUtils

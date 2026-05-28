@@ -12,50 +12,8 @@ class SensorReadingWebServer(object):
 
     def __init__(self, ip, port, endpoint):
 
-        self.resources = {
-            "living_room": {
-                "temperature": {
-                    "type": "temperature",
-                    "unit": "Cel"
-                },
-                "humidity": {
-                    "type": "humidity",
-                    "unit": "%RH"
-                },
-                "motion": {
-                    "type": "motion",
-                    "unit": "bool"
-                }
-            },
-            "kitchen": {
-                "temperature": {
-                    "type": "temperature",
-                    "unit": "Cel"
-                },
-                "humidity": {
-                    "type": "humidity",
-                    "unit": "%RH"
-                },
-                "motion": {
-                    "type": "motion",
-                    "unit": "bool"
-                }
-            },
-            "bedroom": {
-                "temperature": {
-                    "type": "temperature",
-                    "unit": "Cel"
-                },
-                "humidity": {
-                    "type": "humidity",
-                    "unit": "%RH"
-                },
-                "motion": {
-                    "type": "motion",
-                    "unit": "bool"
-                }
-            }
-        }
+        with open("sensors_config.json", "r") as f:
+            self.resources = json.load(f)
         self.sensor_types = self._build_sensor_types()
         self.devices_list = self._build_devices_list()
 

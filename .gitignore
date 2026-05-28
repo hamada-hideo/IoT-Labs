@@ -8,5 +8,6 @@ __pycache__/
 .#*
 *~
 
-# LAB5: file json del catalogo
+# LAB5: file json generati / aggiornati a runtime
 Software/Catalog/catalog.json
+Software/SensorReadingActuatorControlWebServer/actuators_state.json

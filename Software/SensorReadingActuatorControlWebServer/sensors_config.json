@@ -1,0 +1,44 @@
+{
+    "living_room": {
+        "temperature": {
+            "type": "temperature",
+            "unit": "Cel"
+        },
+        "humidity": {
+            "type": "humidity",
+            "unit": "%RH"
+        },
+        "motion": {
+            "type": "motion",
+            "unit": "bool"
+        }
+    },
+    "kitchen": {
+        "temperature": {
+            "type": "temperature",
+            "unit": "Cel"
+        },
+        "humidity": {
+            "type": "humidity",
+            "unit": "%RH"
+        },
+        "motion": {
+            "type": "motion",
+            "unit": "bool"
+        }
+    },
+    "bedroom": {
+        "temperature": {
+            "type": "temperature",
+            "unit": "Cel"
+        },
+        "humidity": {
+            "type": "humidity",
+            "unit": "%RH"
+        },
+        "motion": {
+            "type": "motion",
+            "unit": "bool"
+        }
+    }
+}

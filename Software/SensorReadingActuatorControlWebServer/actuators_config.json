@@ -1,0 +1,81 @@
+{
+    "rules": {
+        "thermostat": {
+            "unit": "Cel",
+            "low": 10,
+            "high": 30
+        },
+        "lights": {
+            "unit": "bool",
+            "low": null,
+            "high": null
+        },
+        "blinds": {
+            "unit": "%",
+            "low": 0,
+            "high": 100
+        }
+    },
+    "initial_state": {
+        "living_room": {
+            "thermostat": {
+                "type": "thermostat",
+                "v": 20,
+                "u": "Cel",
+                "t": 0
+            },
+            "lights": {
+                "type": "lights",
+                "v": false,
+                "u": "bool",
+                "t": 0
+            },
+            "blinds": {
+                "type": "blinds",
+                "v": 0,
+                "u": "%",
+                "t": 0
+            }
+        },
+        "kitchen": {
+            "thermostat": {
+                "type": "thermostat",
+                "v": 20.0,
+                "u": "Cel",
+                "t": 0
+            },
+            "lights": {
+                "type": "lights",
+                "v": false,
+                "u": "bool",
+                "t": 0
+            },
+            "blinds": {
+                "type": "blinds",
+                "v": 0,
+                "u": "%",
+                "t": 0
+            }
+        },
+        "bedroom": {
+            "thermostat": {
+                "type": "thermostat",
+                "v": 20.0,
+                "u": "Cel",
+                "t": 0
+            },
+            "lights": {
+                "type": "lights",
+                "v": false,
+                "u": "bool",
+                "t": 0
+            },
+            "blinds": {
+                "type": "blinds",
+                "v": 0,
+                "u": "%",
+                "t": 0
+            }
+        }
+    }
+}
