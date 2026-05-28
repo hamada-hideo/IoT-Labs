@@ -31,10 +31,14 @@ class LoggerWebServer():
 
     def _get_room_name(self, senml_name):
         segments = senml_name.strip().split("/")
+        if len(segments) < 2:
+            raise cherrypy.HTTPError(400, "Wrong SenML name")
         return segments[1]
     
     def _get_type(self, senml_name):
         segments = senml_name.strip().split("/")
+        if len(segments) < 3:
+            raise cherrypy.HTTPError(400, "Wrong SenML name")
         return segments[2]
 
     def _get_logs_by_room_and_time(self, room = None, since = None, before = None):

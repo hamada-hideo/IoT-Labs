@@ -38,7 +38,7 @@ class ActuatorControlWebServer:
                     "u": "Cel",
                     "t": 0
                 },
-                "ligths": {
+                "lights": {
                     "type": "lights",
                     "v": False,
                     "u": "bool",
@@ -58,7 +58,7 @@ class ActuatorControlWebServer:
                     "u": "Cel",
                     "t": 0
                 },
-                "ligths": {
+                "lights": {
                     "type": "lights",
                     "v": False,
                     "u": "bool",
@@ -78,7 +78,7 @@ class ActuatorControlWebServer:
                     "u": "Cel",
                     "t": 0
                 },
-                "ligths": {
+                "lights": {
                     "type": "lights",
                     "v": False,
                     "u": "bool",
@@ -97,7 +97,7 @@ class ActuatorControlWebServer:
         self.ip = ip
         self.port = port
         self.endpoint = endpoint
-        self.id = "AcutatorControlWebServer"
+        self.id = "ActuatorControlWebServer"
 
         self.data = {
             "id": self.id,
@@ -168,13 +168,6 @@ class ActuatorControlWebServer:
             res[room] = [a for a in self.state[room]]
         return res
 
-    def _refresh_loop(self):
-        while True:
-            time.sleep(CATALOG_EXPIRATION_TIME // 2)
-            self.cc.refresh_service(self.id)
-            for device in self.devices_list:
-                self.cc.refresh_device(device["id"])
-
     def _get_room_id_device_id(self, senml_name):
         segments = senml_name.strip().split("/")
         if len(segments) != 3 or segments[0] != "smart_home" or segments[1] not in self.state or segments[2] not in self.state[segments[1]]:
@@ -193,7 +186,7 @@ class ActuatorControlWebServer:
             return False
         if self.rules[device_type]["low"] != None and record[SenML.VALUE_KEY] < self.rules[device_type]["low"]:
             return False
-        if self.rules[device_type]["high"] != None and record[SenML.VALUE_KEY] > self.rules[device_type]["rules"]["high"]:
+        if self.rules[device_type]["high"] != None and record[SenML.VALUE_KEY] > self.rules[device_type]["high"]:
             return False
         if record[SenML.UNIT_KEY] != self.rules[device_type]["unit"]:
             return False
@@ -259,7 +252,7 @@ class ActuatorControlWebServer:
 
     def GET(self, *uri, **params):
         """
-        GET /actuators                        → list all rooms
+        GET /actuators                        → list all devices
         GET /actuators/<room>                 → list all devices in a room
         GET /actuators/<room>/<device_id>     → get a specific device
         """
