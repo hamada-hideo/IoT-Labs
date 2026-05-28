@@ -12,12 +12,51 @@ class SensorReadingWebServer(object):
 
     def __init__(self, ip, port, endpoint):
 
-        self.rooms = ["living_room", "kitchen", "bedroom"]
-        self.sensor_types = {
-            "temperature": "Cel", 
-            "humidity": "%RH", 
-            "motion": "bool"
+        self.resources = {
+            "living_room": {
+                "temperature": {
+                    "type": "temperature",
+                    "unit": "Cel"
+                },
+                "humidity": {
+                    "type": "humidity",
+                    "unit": "%RH"
+                },
+                "motion": {
+                    "type": "motion",
+                    "unit": "bool"
+                }
+            },
+            "kitchen": {
+                "temperature": {
+                    "type": "temperature",
+                    "unit": "Cel"
+                },
+                "humidity": {
+                    "type": "humidity",
+                    "unit": "%RH"
+                },
+                "motion": {
+                    "type": "motion",
+                    "unit": "bool"
+                }
+            },
+            "bedroom": {
+                "temperature": {
+                    "type": "temperature",
+                    "unit": "Cel"
+                },
+                "humidity": {
+                    "type": "humidity",
+                    "unit": "%RH"
+                },
+                "motion": {
+                    "type": "motion",
+                    "unit": "bool"
+                }
+            }
         }
+        self.devices_list = self._build_devices_list()
 
         self.ip = ip
         self.port = port
@@ -35,7 +74,11 @@ class SensorReadingWebServer(object):
 
         self.cc = CatalogClient()
 
-        threading.Thread(target=self.cc.try_register_refresh_loop, args = (self.data, self.id), daemon=True).start()
+        self.cc.register_service(self.data)
+        for device in self.devices_list:
+            self.cc.register_device(device)
+
+        threading.Thread(target=self._refresh_loop, daemon=True).start()
 
         self.logger_url_valid = False
         
@@ -45,16 +88,29 @@ class SensorReadingWebServer(object):
         self.logger_url = url
         self.logger_url_valid = True
 
+    def _build_devices_list(self):
+        res = []
+        for room in self.resources:
+            for sensor in self.resources[room]:
+                res.append({
+                    "id": f"{room}-{sensor}",
+                    "description": f"{sensor} sensor located in room {room}",
+                    "resources": self.resources[room][sensor]
+                })
+        return res
+
     def _build_resource_list(self):
         res = dict()
-        for room in self.rooms:
-            res[room] = dict()
-            for sensor in self.sensor_types:
-                res[room][sensor] = {
-                    "type": sensor,
-                    "unit": self.sensor_types[sensor]
-                }
+        for room in self.resources:
+            res[room] = [s for s in self.resources[room]]
         return res
+    
+    def _refresh_loop(self):
+        while True:
+            time.sleep(CATALOG_EXPIRATION_TIME // 2)
+            self.cc.refresh_service(self.id)
+            for device in self.devices_list:
+                self.cc.refresh_device(device["id"])
     
     def _simulate_value(self, s_type):
         if s_type == "temperature": 

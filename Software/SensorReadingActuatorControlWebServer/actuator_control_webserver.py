@@ -10,26 +10,7 @@ class ActuatorControlWebServer:
     exposed = True
     
     def __init__(self, ip, port, endpoint):
-        # rooms is a dict: { room_name: { device_id: device_dict } }
-        self.rooms = {
-            "living_room": {
-                "thermostat": {"v": 20.0, "u": "Cel", "t": 0},
-                "lights": {"v": False, "u": "bool", "t": 0},
-                "blinds": {"v": 0, "u": "%", "t": 0}
-            },
-            "kitchen": {
-                "thermostat": {"v": 20.0, "u": "Cel", "t": 0},
-                "lights": {"v": False, "u": "bool", "t": 0},
-                "blinds": {"v": 0, "u": "%", "t": 0}
-            },
-            "bedroom": {
-                "thermostat": {"v": 20.0, "u": "Cel", "t": 0},
-                "lights": {"v": False, "u": "bool", "t": 0},
-                "blinds": {"v": 0, "u": "%", "t": 0}
-            }
-        }
-
-        self.actuator_rules = {
+        self.rules = {
             "thermostat": {
                 "unit": "Cel",
                 "low": 10,
@@ -49,6 +30,69 @@ class ActuatorControlWebServer:
                 "type": (float, int)
             }
         }
+        self.state = {
+            "living_room": {
+                "thermostat": {
+                    "type": "thermostat",
+                    "v": 20.0, 
+                    "u": "Cel",
+                    "t": 0
+                },
+                "ligths": {
+                    "type": "lights",
+                    "v": False,
+                    "u": "bool",
+                    "t": 0
+                },
+                "blinds": {
+                    "type": "blinds",
+                    "v": 0,
+                    "u": "%",
+                    "t": 0
+                }
+            },
+            "kitchen": {
+                "thermostat": {
+                    "type": "thermostat",
+                    "v": 20.0, 
+                    "u": "Cel",
+                    "t": 0
+                },
+                "ligths": {
+                    "type": "lights",
+                    "v": False,
+                    "u": "bool",
+                    "t": 0
+                },
+                "blinds": {
+                    "type": "blinds",
+                    "v": 0,
+                    "u": "%",
+                    "t": 0
+                }
+            },
+            "bedroom": {
+                "thermostat": {
+                    "type": "thermostat",
+                    "v": 20.0, 
+                    "u": "Cel",
+                    "t": 0
+                },
+                "ligths": {
+                    "type": "lights",
+                    "v": False,
+                    "u": "bool",
+                    "t": 0
+                },
+                "blinds": {
+                    "type": "blinds",
+                    "v": 0,
+                    "u": "%",
+                    "t": 0
+                }
+            }
+        }
+        self.devices_list = self._build_devices_list()
 
         self.ip = ip
         self.port = port
@@ -67,7 +111,11 @@ class ActuatorControlWebServer:
             "resources": self._build_resource_list()
         }
 
-        threading.Thread(target=self.cc.try_register_refresh_loop, args = (self.data, self.id), daemon=True).start()
+        self.cc.register_service(self.data)
+        for device in self.devices_list:
+            self.cc.register_device(device)
+
+        threading.Thread(target=self._refresh_loop, daemon=True).start()
 
         self.logger_url_valid = False
         
@@ -81,39 +129,56 @@ class ActuatorControlWebServer:
         self.logger_url = url
         self.logger_url_valid = True
 
+    def _build_devices_list(self):
+        res = []
+        for room in self.state:
+            for actuator in self.state[room]:
+                res.append({
+                    "id": f"{room}-{actuator}",
+                    "description": f"{actuator} located in room {room}",
+                    "resources": {
+                        "type": actuator,
+                        "unit": self.rules[self.state[room][actuator]["type"]]["unit"],
+                        "min": self.rules[self.state[room][actuator]["type"]]["low"],
+                        "max": self.rules[self.state[room][actuator]["type"]]["high"]
+                    }
+                })
+        return res
+    
     def _build_resource_list(self):
         res = dict()
-        for room in self.rooms:
-            res[room] = dict()
-            for actuator in self.actuator_rules:
-                res[room][actuator] = {
-                    "type": actuator,
-                    "unit": self.actuator_rules[actuator]["unit"],
-                    "min": self.actuator_rules[actuator]["low"],
-                    "max": self.actuator_rules[actuator]["high"]
-                }
+        for room in self.state:
+            res[room] = [a for a in self.state[room]]
         return res
+
+    def _refresh_loop(self):
+        while True:
+            time.sleep(CATALOG_EXPIRATION_TIME // 2)
+            self.cc.refresh_service(self.id)
+            for device in self.devices_list:
+                self.cc.refresh_device(device["id"])
 
     def _get_room_id_device_id(self, senml_name):
         segments = senml_name.strip().split("/")
-        if len(segments) != 3 or segments[0] != "smart_home" or segments[1] not in self.rooms.keys() or segments[2] not in self.rooms[segments[1]].keys():
+        if len(segments) != 3 or segments[0] != "smart_home" or segments[1] not in self.state or segments[2] not in self.state[segments[1]]:
             raise cherrypy.HTTPError(422, "Wrong event name")
         _, room_id, device_id = segments
         return room_id, device_id
 
     def _validate_for_device(self, record):
-        _, device_type = self._get_room_id_device_id(record[SenML.NAME_KEY])
+        room_id, device_id = self._get_room_id_device_id(record[SenML.NAME_KEY])
+        device_type = self.state[room_id][device_id]["type"]
 
-        if device_type not in self.actuator_rules.keys():
+        if device_type not in self.rules:
             return False
         
-        if not isinstance(record[SenML.VALUE_KEY], self.actuator_rules[device_type]["type"]):
+        if not isinstance(record[SenML.VALUE_KEY], self.rules[device_type]["type"]):
             return False
-        if self.actuator_rules[device_type]["low"] != None and record[SenML.VALUE_KEY] < self.actuator_rules[device_type]["low"]:
+        if self.rules[device_type]["low"] != None and record[SenML.VALUE_KEY] < self.rules[device_type]["low"]:
             return False
-        if self.actuator_rules[device_type]["high"] != None and record[SenML.VALUE_KEY] > self.actuator_rules[device_type]["high"]:
+        if self.rules[device_type]["high"] != None and record[SenML.VALUE_KEY] > self.rules[device_type]["rules"]["high"]:
             return False
-        if record[SenML.UNIT_KEY] != self.actuator_rules[device_type]["unit"]:
+        if record[SenML.UNIT_KEY] != self.rules[device_type]["unit"]:
             return False
         
         return True
@@ -122,15 +187,15 @@ class ActuatorControlWebServer:
         return SenML.build_array_dict(
             [SenML.build_event_dict(
                 f"{room_id}/{device_id}",
-                self.rooms[room_id][device_id]["u"],
-                self.rooms[room_id][device_id]["v"],
-                self.rooms[room_id][device_id]["t"],
-            ) for room_id in self.rooms.keys() for device_id in self.rooms[room_id].keys()],
+                self.state[room_id][device_id]["u"],
+                self.state[room_id][device_id]["v"],
+                self.state[room_id][device_id]["t"],
+            ) for room_id in self.state for device_id in self.state[room_id]],
             "smart_home/"
         )
 
     def _get_by_room(self, room_id):
-        room = self.rooms[room_id]
+        room = self.state[room_id]
         return SenML.build_array_dict(
             [SenML.build_event_dict(
                 device_id,
@@ -142,7 +207,7 @@ class ActuatorControlWebServer:
         )
 
     def _get_by_room_and_device(self, room_id, device_id):
-        room = self.rooms[room_id]
+        room = self.state[room_id]
         device = room[device_id]
         return SenML.build_array_dict(
             [SenML.build_event_dict(
@@ -155,8 +220,8 @@ class ActuatorControlWebServer:
 
     def _actuate(self, command):
         room_id, device_id = self._get_room_id_device_id(command[SenML.NAME_KEY])
-        self.rooms[room_id][device_id]["v"] = command[SenML.VALUE_KEY]
-        self.rooms[room_id][device_id]["t"] = time.time()
+        self.state[room_id][device_id]["v"] = command[SenML.VALUE_KEY]
+        self.state[room_id][device_id]["t"] = time.time()
 
     def _process_SenML(self, senml):
         # Usa la funzione dal tuo modulo SenMLUtils
@@ -193,7 +258,7 @@ class ActuatorControlWebServer:
 
         # ── CASE 1: /actuators/<room> 
         room_id = clean[0]
-        if room_id not in self.rooms:
+        if room_id not in self.state:
             raise cherrypy.HTTPError(404, json.dumps({"error": f"Room '{room_id}' not found"}))
 
         if len(clean) == 1:
@@ -202,7 +267,7 @@ class ActuatorControlWebServer:
         # ── CASE 2: /actuators/<room>/<device_id> 
         if len(clean) == 2:
             device_id = clean[1]
-            if device_id not in self.rooms[room_id].keys():
+            if device_id not in self.state[room_id]:
                 raise cherrypy.HTTPError(404, json.dumps({"error": f"Device '{device_id}' not found in room '{room_id}'"}))
             return json.dumps(self._get_by_room_and_device(room_id, device_id)).encode("utf-8")
 
