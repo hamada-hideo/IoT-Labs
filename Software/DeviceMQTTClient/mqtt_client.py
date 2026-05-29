@@ -3,16 +3,22 @@ import paho.mqtt.client as mqtt
 import json
 import time
 import threading
+import os
 
-# Use "broker.hivemq.com" if testing with mobile hotspot
-# Use "127.0.0.1" if running a local mosquitto broker
-HOST = "broker.hivemq.com"
-PORT = 1883
+DIR = os.path.dirname(os.path.abspath(__file__))
 
 class DeviceMQTTClient():
     def __init__(self):
-        self.client_id = "device_001"
-        self.client = mqtt.Client(client_id=self.client_id)
+        self.config_file = os.path.join(DIR, "network_config.json")
+        with open(self.config_file, "r") as f:
+            data = json.load(f)
+        self.ip = data["ip"]
+        self.port = data["port"]
+        self.broker_ip = data["broker"]["ip"]
+        self.broker_port = data["broker"]["port"]
+
+        self.client_id = "DeviceMQTTClient"
+        self.client = mqtt.Client(client_id=f"tiot-group12-{self.client_id}")
         self.running = True
 
         # Assign MQTT callback functions
@@ -25,7 +31,9 @@ class DeviceMQTTClient():
         self.query_request_topic = "/tiot/group12/catalog/query/request"
         self.query_response_topic = "/tiot/group12/catalog/query/response"
 
-        self.client.connect(HOST, PORT)
+        self.payload = self._build_payload()
+
+        self.client.connect(self.broker_ip, self.broker_port)
 
         # Start background refresh thread set to 10 seconds to avoid catalog cleanup expiration
         self.reg_thread = threading.Thread(target=self._registration_loop, daemon=True)
@@ -58,30 +66,33 @@ class DeviceMQTTClient():
     def _build_payload(self):
         payload_dict = {
             "id": self.client_id,
-            "description": "IoT temperature device",
-            "endpoint": None,
+            "description": "IoT MQTT Client device",
             "mqtt": {
-                "ip": HOST,
-                "port": PORT,
-                "topic": self.register_topic
-            },
-            "resources": ["temperature"],
-            "insert_timestamp": time.time()
+                "ip": self.ip,
+                "port": self.port,
+                "sub_topics": [
+                    self.ack_topic,
+                    self.query_request_topic
+                ],
+                "pub_topics": [
+                    self.register_topic,
+                    self.query_response_topic
+                ]
+            }
         }
         return json.dumps(payload_dict)
 
     def _registration_loop(self):
         while self.running:
-            payload = self._build_payload()
-            self.client.publish(self.register_topic, payload)
+            self.client.publish(self.register_topic, self.payload)
             # Keeping it down to 10 seconds beats the catalog's background cleanup loop
-            time.sleep(10)
+            time.sleep(5)
 
     def run(self):
         self.client.loop_start()
-        time.sleep(1) # Give the asynchronous threads a brief moment to log initial connection
 
         while self.running:
+            time.sleep(1) # Give the asynchronous threads a brief moment to log initial connection
             print("\n--- MQTT DEVICE MENU ---")
             print("1. Send Manual Registration/Refresh")
             print("2. Show ALL devices inside the Catalog")
@@ -91,32 +102,28 @@ class DeviceMQTTClient():
             choice = input("Select an option: ").strip()
 
             if choice == "1":
-                payload = self._build_payload()
-                self.client.publish(self.register_topic, payload)
+                self.client.publish(self.register_topic, self.payload)
                 print(">>> Registration request sent to catalog.")
 
             elif choice == "2":
                 # FIXED: Publishes to the REQUEST topic channel, not the response loopback
-                query = {"action": "get_all"}
+                query = {"action": "get_devices"}
                 self.client.publish(self.query_request_topic, json.dumps(query))
                 print(">>> Fetching all records from catalog...")
-                time.sleep(1) # Brief pause to safely catch and isolate async stdout print blocks
 
             elif choice == "3":
                 device_id = input("Enter target complete device ID: ").strip()
                 if device_id:
                     # FIXED: Publishes to the REQUEST topic channel, not the response loopback
-                    query = {"action": "get_by_id", "id": device_id}
+                    query = {"action": "get_device_by_id", "id": device_id}
                     self.client.publish(self.query_request_topic, json.dumps(query))
                     print(f">>> Search query for ID '{device_id}' sent...")
-                    time.sleep(1)
 
             elif choice == "4":
                 self.running = False
                 self.client.loop_stop()
                 self.client.disconnect()
                 print("Disconnected. Goodbye!")
-
-if __name__ == "__main__":
-    device = DeviceMQTTClient()
-    device.run()
+            
+            else:
+                print("Invalid choice")
