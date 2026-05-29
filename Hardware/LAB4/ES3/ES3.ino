@@ -110,7 +110,10 @@ void loop() {
     // Costruzione stringa JSON SenML
     String payload = senMLEncodeTemperature(tempVal);
     mqttClient.publish(topic_pub, payload.c_str());
-    Serial.println("Messaggio pubblicato: " + payload + "per il topic: " + topic_pub);
+    Serial.print("Pubblicato su ");
+    Serial.print(topic_pub);
+    Serial.print(" : ");
+    Serial.println(payload);
   }
 }
 
