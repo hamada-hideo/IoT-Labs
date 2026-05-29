@@ -3,10 +3,7 @@ import json
 import time
 import threading
 import random
-from CatalogClient import CatalogClient
-
-
-
+from catalog_client import CatalogClient
 
 HOST = "broker.hivemq.com"
 PORT = 1883
