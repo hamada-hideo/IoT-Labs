@@ -21,6 +21,7 @@ class LoggerWebServer():
             with open(self.log_file, "w") as f:
                 json.dump(self.logs, f, indent=4)
         self.id_counter = 0
+        self.lock = threading.Lock()
 
         self.ip = ip
         self.port = port
@@ -65,19 +66,20 @@ class LoggerWebServer():
 
     def _get_logs_by_room_and_time(self, room = None, since = None, before = None):
         res = []
-        for log in self.logs:
-            event = log[SenML.EVENTS_KEY][0]
+        with self.lock:
+            for log in self.logs:
+                event = log[SenML.EVENTS_KEY][0]
 
-            # Controlla se la stanza è presente nel nome assoluto (bn+n)
-            room_name = self._get_room_name(event[SenML.NAME_KEY])
-            match_room = (room is None) or (room_name == room)
-            
-            # Controlla il tempo assoluto dell'evento (bt+t)
-            match_since = (since is None) or (event[SenML.TIME_KEY] >= since)
-            match_before = (before is None) or (event[SenML.TIME_KEY] < before)
-            
-            if match_room and match_since and match_before:
-                res.append(log)
+                # Controlla se la stanza è presente nel nome assoluto (bn+n)
+                room_name = self._get_room_name(event[SenML.NAME_KEY])
+                match_room = (room is None) or (room_name == room)
+                
+                # Controlla il tempo assoluto dell'evento (bt+t)
+                match_since = (since is None) or (event[SenML.TIME_KEY] >= since)
+                match_before = (before is None) or (event[SenML.TIME_KEY] < before)
+                
+                if match_room and match_since and match_before:
+                    res.append(log)
 
         return res
     
@@ -86,10 +88,11 @@ class LoggerWebServer():
         flat_events = SenML.flatten_senml(senml)
         
         ids = []
-        for event in flat_events:
-            ids.append(self._insert_new_log(SenML.build_array_dict([event])))
-            with open(self.log_file, "w") as f:
-                json.dump(self.logs, f, indent=4)
+        with self.lock:
+            for event in flat_events:
+                ids.append(self._insert_new_log(SenML.build_array_dict([event])))
+                with open(self.log_file, "w") as f:
+                    json.dump(self.logs, f, indent=4)
         return ids
 
     def _insert_new_log(self, j):
@@ -97,20 +100,22 @@ class LoggerWebServer():
         self.id_counter += 1
         j["epoch"] = time.time()
         j["id"] = id
+        # Attenzione: responsabilità del mutex alla funzione chiamante
         self.logs.append(j)
         return id
     
     def _delete_logs_by_time(self, before):
         res = []
         deleted = []
-        for log in self.logs:
-            if log[SenML.EVENTS_KEY][0][SenML.TIME_KEY] < before:
-                deleted.append(log["id"])
-            else:
-                res.append(log)
-        self.logs = res
-        with open(self.log_file, "w") as f:
-            json.dump(self.log, f, indent=4)
+        with self.lock:
+            for log in self.logs:
+                if log[SenML.EVENTS_KEY][0][SenML.TIME_KEY] < before:
+                    deleted.append(log["id"])
+                else:
+                    res.append(log)
+            self.logs = res
+            with open(self.log_file, "w") as f:
+                json.dump(self.log, f, indent=4)
         return deleted
 
     def GET(self, *path, **query):

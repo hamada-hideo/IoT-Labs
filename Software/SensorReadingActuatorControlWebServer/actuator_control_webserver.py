@@ -16,6 +16,7 @@ class ActuatorControlWebServer:
         self.config_file = os.path.join(DIR, "actuators_config.json")
         self.state_file = os.path.join(DIR, "actuators_state.json")
         self._load_data()
+        self.lock = threading.Lock()
 
         self.devices_list = self._build_devices_list()
 
@@ -171,42 +172,46 @@ class ActuatorControlWebServer:
         return True
 
     def _get_all(self):
-        return SenML.build_array_dict(
-            [SenML.build_event_dict(
-                f"{room_id}/{device_id}",
-                self.state[room_id][device_id]["u"],
-                self.state[room_id][device_id]["v"],
-                self.state[room_id][device_id]["t"],
-            ) for room_id in self.state for device_id in self.state[room_id]],
-            "smart_home/"
-        )
+        with self.lock:
+            return SenML.build_array_dict(
+                [SenML.build_event_dict(
+                    f"{room_id}/{device_id}",
+                    self.state[room_id][device_id]["u"],
+                    self.state[room_id][device_id]["v"],
+                    self.state[room_id][device_id]["t"],
+                ) for room_id in self.state for device_id in self.state[room_id]],
+                "smart_home/"
+            )
 
     def _get_by_room(self, room_id):
-        room = self.state[room_id]
-        return SenML.build_array_dict(
-            [SenML.build_event_dict(
-                device_id,
-                room[device_id]["u"],
-                room[device_id]["v"],
-                room[device_id]["t"]
-            ) for device_id in room.keys()],
-            f"smart_home/{room_id}/"
-        )
+        with self.lock:
+            room = self.state[room_id]
+            return SenML.build_array_dict(
+                [SenML.build_event_dict(
+                    device_id,
+                    room[device_id]["u"],
+                    room[device_id]["v"],
+                    room[device_id]["t"]
+                ) for device_id in room.keys()],
+                f"smart_home/{room_id}/"
+            )
 
     def _get_by_room_and_device(self, room_id, device_id):
-        room = self.state[room_id]
-        device = room[device_id]
-        return SenML.build_array_dict(
-            [SenML.build_event_dict(
-                f"smart_home/{room_id}/{device_id}",
-                device["u"],
-                device["v"],
-                device["t"]
-            )]
-        )
+        with self.lock:
+            room = self.state[room_id]
+            device = room[device_id]
+            return SenML.build_array_dict(
+                [SenML.build_event_dict(
+                    f"smart_home/{room_id}/{device_id}",
+                    device["u"],
+                    device["v"],
+                    device["t"]
+                )]
+            )
 
     def _actuate(self, command):
         room_id, device_id = self._get_room_id_device_id(command[SenML.NAME_KEY])
+        # Attenzione: responsabilità del lock al chiamante
         self.state[room_id][device_id]["v"] = command[SenML.VALUE_KEY]
         self.state[room_id][device_id]["t"] = time.time()
         with open(self.state_file, "w") as f:
