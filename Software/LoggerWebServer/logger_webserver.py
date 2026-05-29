@@ -2,14 +2,24 @@ import cherrypy
 import json
 import time
 import threading
+import os
 import SenMLUtils as SenML
 from Catalog.catalog_client import CatalogClient
+
+DIR = os.path.dirname(os.path.abspath(__file__))
 
 class LoggerWebServer():
     exposed = True
 
     def __init__(self, ip, port, endpoint):
-        self.logs = []
+        self.log_file = os.path.join(DIR, "logs.json")
+        if os.path.exists(self.log_file):
+            with open(self.log_file, "r") as f:
+                self.logs = json.load(f)
+        else:
+            self.logs = []
+            with open(self.log_file, "w") as f:
+                json.dump(self.logs, f, indent=4)
         self.id_counter = 0
 
         self.ip = ip
@@ -78,6 +88,8 @@ class LoggerWebServer():
         ids = []
         for event in flat_events:
             ids.append(self._insert_new_log(SenML.build_array_dict([event])))
+            with open(self.log_file, "w") as f:
+                json.dump(self.logs, f, indent=4)
         return ids
 
     def _insert_new_log(self, j):
@@ -97,6 +109,8 @@ class LoggerWebServer():
             else:
                 res.append(log)
         self.logs = res
+        with open(self.log_file, "w") as f:
+            json.dump(self.log, f, indent=4)
         return deleted
 
     def GET(self, *path, **query):
