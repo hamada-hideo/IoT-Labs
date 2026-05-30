@@ -68,8 +68,10 @@ class DeviceMQTTClient():
             "id": self.client_id,
             "description": "IoT MQTT Client device",
             "mqtt": {
-                "ip": self.ip,
-                "port": self.port,
+                "broker": {
+                    "ip": self.broker_ip,
+                    "port": self.broker_port
+                },
                 "sub_topics": [
                     self.ack_topic,
                     self.query_request_topic

@@ -1,0 +1,6 @@
+{
+    "ip": "127.0.0.1",
+    "port": 1883,
+    "publish_topic": "/tiot/group12/temperature",
+    "command_topic": "/tiot/group12/temperature/config"
+}
