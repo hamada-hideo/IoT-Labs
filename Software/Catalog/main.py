@@ -16,8 +16,8 @@ if __name__ == '__main__':
 
     with open(os.path.join(DIR, "network_config.json"), "r") as f:
         data = json.load(f)
-    endpoint = data["endpoint"]
-    port = data["port"]
+    endpoint = data["rest"]["endpoint"]
+    port = data["rest"]["port"]
 
     conf = {
         '/': {

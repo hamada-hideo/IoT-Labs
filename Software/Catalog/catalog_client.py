@@ -10,9 +10,9 @@ class CatalogClient:
         self.config_file = os.path.join(DIR, "network_config.json")
         with open(self.config_file, "r") as f:
             data = json.load(f)
-        self.catalog_ip = data["ip"]
-        self.catalog_port = data["port"]
-        self.catalog_endpoint = data["endpoint"]
+        self.catalog_ip = data["rest"]["ip"]
+        self.catalog_port = data["rest"]["port"]
+        self.catalog_endpoint = data["rest"]["endpoint"]
         self.loop_time = data["expiration_time"] // 2
         self.catalog_devices_path = "devices"
         self.catalog_services_path = "services"

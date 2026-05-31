@@ -13,12 +13,14 @@ class Catalog(object):
     def __init__(self):
         self.config_file = os.path.join(DIR, "network_config.json")
         with open(self.config_file, "r") as f:
-            self.cleanup_time = json.load(f)["expiration_time"]
+            data = json.load(f)
+        self.cleanup_time = data["expiration_time"]
+        self.broker = data["mqtt"]["broker"]
         # Utilizzo un Lock per evitare race conditions durante lettura/scrittura
         self.lock = threading.Lock()
         # Struttura base del catalogo
         self.catalog = {
-            "broker": {"ip": "broker.emqx.io", "port": 1883},
+            "broker": self.broker,
             "devices": {},
             "services": {}
         }
@@ -39,10 +41,7 @@ class Catalog(object):
                         self.catalog['services'] = {}
                     # Sovrascrive sempre le info del broker con quelle hardcodate 
                     # (HiveMQ è molto più stabile di Eclipse per lo sviluppo IoT)
-                    self.catalog['broker'] = {
-                        "ip": "broker.emqx.io", 
-                        "port": 1883
-                    }   
+                    self.catalog['broker'] = self.broker
                 except json.JSONDecodeError:
                     # Se il file è corrotto, lo ricrea da zero
                     self._save_catalog() 

@@ -7,6 +7,8 @@ import paho.mqtt.client as mqtt
 # Importiamo la classe Catalog dal vostro file catalog_service.py
 from catalog_service import Catalog
 
+DIR = os.path.dirname(os.path.abspath(__file__))
+
 class MQTTCatalogBridge:
     def __init__(self, catalog_instance):
         # Salviamo il riferimento al catalogo comune passato come parametro
@@ -17,10 +19,14 @@ class MQTTCatalogBridge:
         self.client.on_connect = self.on_connect
         self.client.on_message = self.on_message
 
+        self.config_file = os.path.join(DIR, "network_config.json")
+        with open(self.config_file, "r") as f:
+            data = json.load(f)
         # Scegliamo un topic globale per le registrazioni (definito dal vostro team)
-        self.registration_topic = "/tiot/group12/catalog/register"
-        self.query_request_topic = "/tiot/group12/catalog/query/request"
-        self.query_response_topic = "/tiot/group12/catalog/query/response"
+        self.registration_topic = data["mqtt"]["register_topic"]
+        self.query_request_topic = data["mqtt"]["query_request_topic"]
+        self.query_response_topic = data["mqtt"]["query_response_topic"]
+        self.generic_ack_topic = data["mqtt"]["ack_topic"]
 
         self.broker_ip = self.catalog_service.catalog["broker"]["ip"]
         self.broker_port = self.catalog_service.catalog["broker"]["port"]
@@ -72,27 +78,46 @@ class MQTTCatalogBridge:
 
     def _handle_query(self, payload):
         action = payload.get("action")
+        request_id = payload.get("request_id")
         with self.catalog_service.lock:
             if action == "get_all":
-                result = self.catalog_service.catalog
+                result = {
+                    "data": self.catalog_service.catalog
+                }
             elif action == "get_devices":
-                result = self.catalog_service.catalog["devices"]
+                result = {
+                    "data": self.catalog_service.catalog["devices"]
+                }
             elif action == "get_services":
-                result = self.catalog_service.catalog["services"]
+                result = {
+                    "data": self.catalog_service.catalog["services"]
+                }
             elif action == "get_device_by_id":
                 device_id = payload.get("id")
-                result = self.catalog_service.catalog["devices"].get(device_id, {"error": "not found"})
+                if not device_id:
+                    result = {"error": "id not found"}
+                else:
+                    result = {
+                        "data": self.catalog_service.catalog["devices"].get(device_id, {"error": "not found"})
+                    }
             elif action == "get_service_by_id":
                 service_id = payload.get("id")
-                result = self.catalog_service.catalog["services"].get(service_id, {"error": "not found"})
+                if not service_id:
+                    result = {"error": "id not found"}
+                else:
+                    result = {
+                        "data": self.catalog_service.catalog["services"].get(service_id, {"error": "not found"})
+                    }
             else:
                 result = {"error": "unknown action"}
+        if request_id and "error" not in result:
+            result["request_id"] = request_id
         self.client.publish(self.query_response_topic, json.dumps(result))
         print(f"[MQTT] Query response inviata su {self.query_response_topic}")
 
     def _handle_registration(self, payload):
         # 2. VALIDAZIONI PER LA REGISTRAZIONE / REFRESH DEI DISPOSITIVI
-        category = payload.get("category", "devices")
+        category = payload.get("category")
         if category not in ["devices", "services"]:
             print("[MQTT] Errore: Categoria non valida. Usa 'devices' o 'services'")
             return
@@ -101,26 +126,38 @@ class MQTTCatalogBridge:
         if not item_id:
             print("[MQTT] Errore: Il payload non contiene un 'id'")
             return
+        
+        request_id = payload.get("request_id")
 
         # 3. STRUTTURA DEL REFRESH O INSERIMENTO (Usando il LOCK del catalogo)
         with self.catalog_service.lock:
             if item_id in self.catalog_service.catalog[category]:
-                payload['insert_timestamp'] = time.time()
-                self.catalog_service.catalog[category][item_id] = payload
+                if "data" in payload:
+                    payload["data"]['insert_timestamp'] = time.time()
+                    self.catalog_service.catalog[category][item_id] = payload["data"]
+                else:
+                    self.catalog_service.catalog[category][item_id]['insert_timestamp'] = time.time()
                 print(f"[MQTT] Refresh effettuato per {item_id}")
             else:
-                payload['insert_timestamp'] = time.time()
-                self.catalog_service.catalog[category][item_id] = payload
-                print(f"[MQTT] Nuovo {category[:-1]} registrato con successo via MQTT")
+                if "data" in payload:
+                    payload["data"]['insert_timestamp'] = time.time()
+                    self.catalog_service.catalog[category][item_id] = payload["data"]
+                    print(f"[MQTT] Nuovo {category[:-1]} registrato con successo via MQTT")
+                else:
+                    print(f"[MQTT] Errore durante la registrazione: campo 'data' non presente")
 
             self.catalog_service._save_catalog()
 
         # 4. PUBBLICAZIONE DELL'ACKNOWLEDGEMENT (ACK)
-        response_topic = f"/tiot/group12/catalog/ack/{item_id}"
+        response_topic = self.generic_ack_topic.replace("<id>", item_id)
         ack_message = {
-            "status": "success",
-            "message": f"Registrazione/Refresh di {item_id} elaborata dal Catalogo."
+            "data": {
+                "status": "success",
+                "message": f"Registrazione/Refresh di {item_id} elaborata dal Catalogo."
+            }
         }
+        if request_id:
+            ack_message["request_id"] = request_id
         self.client.publish(response_topic, json.dumps(ack_message))
         print(f"[MQTT] ACK inviato sul topic: {response_topic}")
 
