@@ -105,8 +105,9 @@ class MQTTCatalogBridge:
         # 3. STRUTTURA DEL REFRESH O INSERIMENTO (Usando il LOCK del catalogo)
         with self.catalog_service.lock:
             if item_id in self.catalog_service.catalog[category]:
-                self.catalog_service.catalog[category][item_id]['insert_timestamp'] = time.time()
-                print(f"[MQTT] Refresh timestamp effettuato per {item_id}")
+                payload['insert_timestamp'] = time.time()
+                self.catalog_service.catalog[category][item_id] = payload
+                print(f"[MQTT] Refresh effettuato per {item_id}")
             else:
                 payload['insert_timestamp'] = time.time()
                 self.catalog_service.catalog[category][item_id] = payload
