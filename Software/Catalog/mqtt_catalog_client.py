@@ -33,7 +33,6 @@ class MQTTCatalogClient:
     def _on_connect(self, client, userdata, flags, rc):
         if rc == 0:
             print("\n[MQTT] Successfully connected to the Broker!")
-            print(f"[MQTTCatalogClient] subscribing to topics {self.ack_topic}, {self.query_response_topic}")
             self.client.subscribe([(self.ack_topic, 2), (self.query_response_topic, 2)])
             self._connected_event.set()
         else:
@@ -42,7 +41,6 @@ class MQTTCatalogClient:
     def _on_message(self, client, userdata, msg):
         try:
             payload = json.loads(msg.payload.decode("utf-8"))
-            print(f"[MQTTCatalogClient] receved message on topic {msg.topic}: {payload}")
             request_id = payload.get("request_id")
 
             if not request_id:
@@ -68,7 +66,7 @@ class MQTTCatalogClient:
         if not event.wait(timeout=timeout):
             with self.lock:
                 del self.pending_requests[request_id]
-            raise TimeoutError("Timeout waiting for catalog response")
+            return None
 
         with self.lock:
             response = self.pending_requests[request_id]["response"]
