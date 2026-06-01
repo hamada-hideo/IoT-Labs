@@ -1,11 +1,10 @@
 import cherrypy
 import json
 import time
-import requests
 import threading
 import os
 import SenMLUtils as SenML
-from Catalog.catalog_client import *
+from Catalog.mqtt_catalog_client import MQTTCatalogClient
 
 DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -24,7 +23,6 @@ class ActuatorControlWebServer:
         self.port = port
         self.endpoint = endpoint
         self.id = "ActuatorControlWebServer"
-        self.logger_id = "LoggerWebServer"
 
         self.data = {
             "id": self.id,
@@ -37,17 +35,10 @@ class ActuatorControlWebServer:
         }
         self.registered = False
 
-        self.cc = CatalogClient()
+        self.cc = MQTTCatalogClient(self.id)
+        self.cc.connect()
 
         threading.Thread(target=self._try_register_refresh_loop, daemon=True).start()
-
-        self.logger_url_valid = False
-        
-        threading.Thread(target=self._try_get_logger_url, daemon=True).start()
-
-    # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
 
     def _load_data(self):
         with open(self.config_file, "r") as f:
@@ -112,16 +103,6 @@ class ActuatorControlWebServer:
                 else:
                     if not self.cc.refresh_device(self.devices_list[i]["device"]["id"]):
                         self.devices_list[i]["registered"] = False
-
-    def _try_get_logger_url(self):
-        while True:
-            time.sleep(self.cc.loop_time)
-            res = self.cc.get_service(self.logger_id)
-            if res:
-                url = res["rest"]["url"]
-                self.logger_url = url
-                self.logger_url_valid = True
-                break
 
     def _build_devices_list(self):
         res = []
@@ -211,14 +192,12 @@ class ActuatorControlWebServer:
 
     def _actuate(self, command):
         room_id, device_id = self._get_room_id_device_id(command[SenML.NAME_KEY])
-        # Attenzione: responsabilità del lock al chiamante
         self.state[room_id][device_id]["v"] = command[SenML.VALUE_KEY]
         self.state[room_id][device_id]["t"] = time.time()
         with open(self.state_file, "w") as f:
             json.dump(self.state, f, indent=4)
 
     def _process_SenML(self, senml):
-        # Usa la funzione dal tuo modulo SenMLUtils
         flat_events = SenML.flatten_senml(senml)
         
         cnt = 0
@@ -230,27 +209,15 @@ class ActuatorControlWebServer:
         
         return cnt
         
-    # ------------------------------------------------------------------
-    # GET
-    # ------------------------------------------------------------------
-
     def GET(self, *uri, **params):
-        """
-        GET /actuators                        → list all devices
-        GET /actuators/<room>                 → list all devices in a room
-        GET /actuators/<room>/<device_id>     → get a specific device
-        """
-
         if len(params) > 0:
             raise cherrypy.HTTPError(400, f"Unknown parameters: {[k for k in params.keys()]}")
         
         clean = [seg for seg in uri if seg.strip()]
 
-        # ── CASE 0: /actuators 
         if len(clean) == 0:
             return json.dumps(self._get_all()).encode("utf-8")
 
-        # ── CASE 1: /actuators/<room> 
         room_id = clean[0]
         if room_id not in self.state:
             raise cherrypy.HTTPError(404, json.dumps({"error": f"Room '{room_id}' not found"}))
@@ -258,24 +225,16 @@ class ActuatorControlWebServer:
         if len(clean) == 1:
             return json.dumps(self._get_by_room(room_id)).encode("utf-8")
 
-        # ── CASE 2: /actuators/<room>/<device_id> 
         if len(clean) == 2:
             device_id = clean[1]
             if device_id not in self.state[room_id]:
                 raise cherrypy.HTTPError(404, json.dumps({"error": f"Device '{device_id}' not found in room '{room_id}'"}))
             return json.dumps(self._get_by_room_and_device(room_id, device_id)).encode("utf-8")
 
-
-        # ── CASE ERROR: too many segments 
         raise cherrypy.HTTPError(400, "URI format: /actuators[/<room>[/<device_id>]]")
 
 
-    #--- POST -----
     def POST(self,*uri,**params):
-        """
-        POST /actuators with SenML payload
-        """
-
         if len(uri) > 0:
             raise cherrypy.HTTPError(404, "URI too specific")
         if len(params) > 0:
@@ -291,18 +250,8 @@ class ActuatorControlWebServer:
         
         cnt = self._process_SenML(data)
 
-        if self.logger_url_valid:
-            try:
-                # Effettuiamo una POST locale all'endpoint del logger (es. porta 8080)
-                response = requests.post(self.logger_url, json=data, timeout=2)
-                if response.status_code != 200:
-                    print(f"Attenzione: Impossibile salvare il log. Risposta del server: {response.status_code} - {response.text}")
-            except requests.exceptions.RequestException as e:
-                # Se il logger è spento, stampiamo l'errore su console 
-                # ma non facciamo crashare il server attuatori
-                print(f"Attenzione: Impossibile salvare il log. Errore: {e}")
-                self.logger_url_valid = False
-                threading.Thread(target=self.cc.try_get_url, args = ("LoggerWebServer", self._on_logger_url), daemon=True).start()
+        # PUBBLICAZIONE MQTT AGGIUNTA QUI
+        self.cc.client.publish("/tiot/group12/actuators/commands", json.dumps(data))
 
         return json.dumps({
             "message": f"Executed {cnt} commands"

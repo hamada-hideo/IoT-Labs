@@ -3,10 +3,59 @@ import json
 import time
 import threading
 import os
+import paho.mqtt.client as mqtt
 import SenMLUtils as SenML
-from Catalog.catalog_client import CatalogClient
+
+# Importiamo il client MQTT al posto di quello REST
+from Catalog.mqtt_catalog_client import MQTTCatalogClient
 
 DIR = os.path.dirname(os.path.abspath(__file__))
+
+class MQTTLoggerBridge:
+    def __init__(self, logger_instance):
+        self.logger_service = logger_instance
+        
+        self.broker = "broker.emqx.io"
+        self.port = 1883
+        
+        self.client = mqtt.Client(
+            mqtt.CallbackAPIVersion.VERSION2, 
+            client_id=f"EventLog_Group12_{int(time.time())}"
+        )
+        self.client.on_connect = self.on_connect
+        self.client.on_message = self.on_message
+
+    def on_connect(self, client, userdata, flags, reason_code, properties):
+        if reason_code == 0:
+            print(f"[MQTT Logger] Connesso con successo al Broker su {self.broker}:{self.port}!")
+            self.client.subscribe("/tiot/group12/#")
+        else:
+            print(f"[MQTT Logger] Errore di connessione. Codice: {reason_code}")
+
+    def on_message(self, client, userdata, msg):
+        try:
+            payload = json.loads(msg.payload.decode("utf-8"))
+            
+            # Il Logger intercetta i dati MQTT e li passa al parser SenML
+            if SenML.validate_SenML(payload):
+                self.logger_service._process_SenML(payload)
+                print(f"[MQTT Logger] Evento salvato con successo da {msg.topic}")
+            else:
+                # Scarta silenziosamente il traffico non SenML (utile se il topic è affollato)
+                # print(f"[MQTT Logger - WARN] Messaggio non SenML scartato da {msg.topic}")
+                pass
+                
+        except json.JSONDecodeError:
+            print(f"[MQTT Logger - ERROR] Il payload da {msg.topic} non è un JSON valido.")
+        except Exception as e:
+            print(f"[MQTT Logger - ERROR] Eccezione durante l'elaborazione del messaggio: {e}")
+
+    def run(self):
+        try:
+            self.client.connect(self.broker, self.port, 60)
+            self.client.loop_start()
+        except Exception as e:
+            print(f"[MQTT Logger - ERROR] Impossibile avviare il client MQTT: {e}")
 
 class LoggerWebServer():
     exposed = True
@@ -36,11 +85,17 @@ class LoggerWebServer():
             }
         }
 
-        self.cc = CatalogClient()
+        # Istanziamo e connettiamo il MQTTCatalogClient per la discovery
+        self.cc = MQTTCatalogClient(self.id)
+        self.cc.connect()
 
         self.registered = False
 
         threading.Thread(target=self._try_register_refresh_loop, args = (self.data, self.id), daemon=True).start()
+        
+        # Facciamo partire il ponte MQTT che ascolta la rete
+        self.mqtt_bridge = MQTTLoggerBridge(self)
+        self.mqtt_bridge.run()
 
     def _try_register_refresh_loop(self, payload, id):
         while True:
@@ -69,24 +124,17 @@ class LoggerWebServer():
         with self.lock:
             for log in self.logs:
                 event = log[SenML.EVENTS_KEY][0]
-
-                # Controlla se la stanza è presente nel nome assoluto (bn+n)
                 room_name = self._get_room_name(event[SenML.NAME_KEY])
                 match_room = (room is None) or (room_name == room)
-                
-                # Controlla il tempo assoluto dell'evento (bt+t)
                 match_since = (since is None) or (event[SenML.TIME_KEY] >= since)
                 match_before = (before is None) or (event[SenML.TIME_KEY] < before)
                 
                 if match_room and match_since and match_before:
                     res.append(log)
-
         return res
     
     def _process_SenML(self, senml):
-        # Usa la funzione dal tuo modulo SenMLUtils
         flat_events = SenML.flatten_senml(senml)
-        
         ids = []
         with self.lock:
             for event in flat_events:
@@ -100,7 +148,6 @@ class LoggerWebServer():
         self.id_counter += 1
         j["epoch"] = time.time()
         j["id"] = id
-        # Attenzione: responsabilità del mutex alla funzione chiamante
         self.logs.append(j)
         return id
     
@@ -115,7 +162,7 @@ class LoggerWebServer():
                     res.append(log)
             self.logs = res
             with open(self.log_file, "w") as f:
-                json.dump(self.log, f, indent=4)
+                json.dump(self.logs, f, indent=4)
         return deleted
 
     def GET(self, *path, **query):
