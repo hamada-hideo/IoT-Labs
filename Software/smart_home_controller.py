@@ -1,196 +1,193 @@
 import paho.mqtt.client as mqtt
-import time
+import requests
 import json
+import time
 import threading
 import os
 from collections import deque
 
-# Il client REST per la registrazione
-from Catalog.catalog_client import CatalogClient 
-
-DIR = os.path.dirname(os.path.abspath(__file__))
-
 class SmartHomeController:
-    def __init__(self, device_id):
-        self.device_id = device_id
+    def __init__(self):
+        self.load_config()
         
-        self.catalog = CatalogClient()
-        
-        config_file = os.path.join(DIR, "network_config.json")
-        with open(config_file, "r") as f:
-            network_data = json.load(f)
-        self.broker_ip = network_data["mqtt"]["broker"]["ip"]
-        self.broker_port = network_data["mqtt"]["broker"]["port"]
+        self.broker = "broker.emqx.io"
+        self.port = 1883
+        self.base_topic = "/tiot/group12"
+        self.client_id = f"Controller_Group12_{int(time.time())}"
 
-        self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=f"Controller_{self.device_id}_{int(time.time())}")
+        # Strutture dati per le statistiche mobili
+        self.temp_window = deque(maxlen=self.config["rolling_window_size"])
+
+        # Stato della Presenza e del Sistema
+        self.room_state = {
+            "lights": False,
+            "fan": 0,
+            "lcd": "",
+            "green_lights": False
+        }
+        self.last_presence_time = 0  # Timestamp dell'ultima rilevazione (PIR o Audio)
+        self.is_running = True
+
+        # Configurazione Client MQTT
+        self.client = mqtt.Client(client_id=self.client_id)
+        self.client.on_connect = self.on_connect
         self.client.on_message = self.on_message
 
-        # Topic allineati
-        self.topic_telemetry = "/tiot/group12/sensors/telemetry"
-        self.topic_commands = "/tiot/group12/actuators/commands"
-        self.topic_alerts = "/tiot/group12/alerts"
-
-        # Dizionario delle stanze
-        self.rooms = {} 
-
-        self.temp_threshold = 26.0
-        self.alert_threshold = 30.0
-        
-        self.registered = False
-        self.data = {} 
-
-    def _try_register_refresh_loop(self):
-        while True:
-            time.sleep(self.catalog.loop_time)
-            if not self.registered:
-                if self.catalog.register_service(self.data):
-                    self.registered = True
-                    print(f"[Controller] Registrato con successo al Catalogo via REST.")
-            else:
-                if not self.catalog.refresh_service(self.device_id):
-                    self.registered = False
-                    print(f"[Controller] Errore nel refresh, ritento la registrazione...")
-
-    def setup(self):
-        self.data = {
-            "id": self.device_id,
-            "description": "Integrated Smart Home Controller (Ex 13 & 14)",
-            "mqtt": {
-                "sub_topics": [self.topic_telemetry], 
-                "pub_topics": [self.topic_commands, self.topic_alerts]
-            },
-            "resources": ["controller"]
-        }
-        threading.Thread(target=self._try_register_refresh_loop, daemon=True).start()
-
-    def start(self):
-        self.setup()
-        self.client.connect(self.broker_ip, self.broker_port, 60)
-        self.client.subscribe(self.topic_telemetry) 
-        print(f"[{self.device_id}] Avviato e in ascolto su MQTT...")
-        self.client.loop_forever()
-
-    def _get_room_data(self, room_name):
-        if room_name not in self.rooms:
-            self.rooms[room_name] = {
-                "motion": False,
-                "noise": 0.0, 
-                "temp_history": deque(maxlen=10),
-                "led_state": None,
-                "fan_speed": None,
-                "lcd_text": "" 
+    def load_config(self):
+        """Carica le soglie dal file JSON esterno"""
+        try:
+            with open("config.json", "r") as f:
+                self.config = json.load(f)
+            print("[CONFIG] Impostazioni caricate correttamente da config.json")
+        except Exception as e:
+            print(f"[CONFIG] Errore caricamento file. Uso valori di fallback. {e}")
+            self.config = {
+                "catalog_url": "http://127.0.0.1:8080",
+                "temperature_threshold": 26.0,
+                "presence_timeout_seconds": 60,
+                "rolling_window_size": 10
             }
-        return self.rooms[room_name]
+
+    def register_and_keep_alive(self):
+        """Invia la registrazione iniziale e mantiene il Keep-Alive attivo via REST (Ex 13.1)"""
+        service_info = {
+            "service_id": "smart_home_controller",
+            "description": "Rule Engine Python con statistiche e gestione presenza",
+            "endpoints": [self.base_topic]
+        }
+        url = f"{self.config['catalog_url']}/catalog/services"
+        
+        while self.is_running:
+            try:
+                # Usiamo POST o PUT a seconda delle specifiche del tuo Catalog per l'update
+                res = requests.post(url, json=service_info, timeout=5)
+                if res.status_code in [200, 201]:
+                    print(f"[REST KEEP-ALIVE] Registrazione aggiornata al Catalogo. Stato: {res.status_code}")
+                else:
+                    print(f"[REST KEEP-ALIVE] Errore Catalogo: {res.status_code}")
+            except Exception as e:
+                print(f"[REST KEEP-ALIVE] Catalogo non raggiungibile: {e}")
+            
+            # Attende 30 secondi prima del prossimo battito di keep-alive
+            time.sleep(30)
+
+    def on_connect(self, client, userdata, flags, rc):
+        print(f"[MQTT] Connesso al broker {self.broker}")
+        sub_topic = f"{self.base_topic}/sensors/telemetry"
+        self.client.subscribe(sub_topic)
+        print(f"[MQTT] Iscritto al topic di telemetria: {sub_topic}")
+
+    def send_command(self, actuator, value, unit):
+        """Invia comandi SenML filtrando i duplicati (Anti-Spam)"""
+        if self.room_state.get(actuator) == value:
+            return 
+
+        self.room_state[actuator] = value
+        topic = f"{self.base_topic}/actuators/commands"
+        payload = {
+            "bn": "smart_home/living_room/",
+            "e": [{"n": actuator, "v": value, "u": unit, "t": time.time()}]
+        }
+        self.client.publish(topic, json.dumps(payload))
+        print(f"> [COMANDO] living_room -> {actuator}: {value}")
 
     def on_message(self, client, userdata, msg):
         try:
-            payload = json.loads(msg.payload.decode('utf-8'))
+            payload = json.loads(msg.payload.decode("utf-8"))
             events = payload.get("e", [])
-            base_name = payload.get("bn", "") 
             
+            # Controllo preliminare per i comandi di sistema 
             for event in events:
-                full_name = base_name + event["n"]
-                segments = full_name.strip('/').split('/')
+                if event.get("n") == "system":
+                    return # Se è un comando di switch interno, non lo processiamo come telemetria
+
+            current_temp = None
+            pir_motion = False
+
+            # --- PARSING EVENTI SENML ---
+            for event in events:
+                name = event.get("n")
+                val = event.get("v")
+
+                if name == "temperature":
+                    current_temp = val
+                elif name == "motion" and val is True:
+                    pir_motion = True
+                    self.last_presence_time = time.time() # Reset del timer presenza via Hardware
+                elif name == "noise_event" and val is True:
+                    print("\n⚡ [EVENTO EDGE] Rilevato doppio applauso dall'Arduino!")
+                    self.last_presence_time = time.time() # Reset del timer presenza via Audio
+                    # Inversione dello stato della luce verde controllata da Python
+                    new_green_state = not self.room_state["green_lights"]
+                    self.send_command("green_lights", new_green_state, "bool")
+
+            # --- MACCHINA A STATI DELLA PRESENZA ---
+            time_since_last_presence = time.time() - self.last_presence_time
+            is_room_occupied = time_since_last_presence < self.config["presence_timeout_seconds"]
+
+            # --- CALCOLO STATISTICHE MOBILI ---
+            if current_temp is not None:
+                self.temp_window.append(current_temp)
                 
-                if len(segments) >= 2:
-                    room_name = segments[-2] 
-                    sensor_type = segments[-1]
-                    
-                    if "temperature" in sensor_type:
-                        self.handle_temperature(room_name, event["v"])
-                    elif "motion" in sensor_type:
-                        room_data = self._get_room_data(room_name)
-                        room_data["motion"] = bool(event["v"])
-                        self.evaluate_rules(room_name)
-                    elif "noise" in sensor_type:
-                        # Ricezione sensore di rumore dall'Arduino
-                        room_data = self._get_room_data(room_name)
-                        room_data["noise"] = float(event["v"])
-                        # Il rumore potrebbe triggerare altre logiche in futuro!
-        except Exception:
-            pass
+                t_min = min(self.temp_window)
+                t_max = max(self.temp_window)
+                t_mean = sum(self.temp_window) / len(self.temp_window)
+                
+                print(f"\n[STATS] Ultime {len(self.temp_window)} letture -> Min: {t_min:.1f}°C | Max: {t_max:.1f}°C | Media: {t_mean:.1f}°C")
 
-    def handle_temperature(self, room_name, temp):
-        room_data = self._get_room_data(room_name)
-        room_data["temp_history"].append(temp)
+                # Verifica superamento soglia critica sulla MEDIA
+                if t_mean > self.config["temperature_threshold"]:
+                    alert_topic = f"{self.base_topic}/alerts"
+                    alert_payload = {
+                        "alert": "TEMPERATURE_EXCEEDED",
+                        "current_mean": round(t_mean, 2),
+                        "threshold": self.config["temperature_threshold"],
+                        "timestamp": time.time()
+                    }
+                    self.client.publish(alert_topic, json.dumps(alert_payload))
+                    print(f"🚨 [ALLARME MQTT] Pubblicato su {alert_topic}: Media critica {t_mean:.1f}°C!")
+
+                # --- REGOLE (Rule Engine su base Media e Presenza) ---
+                lcd_text = f"T:{t_mean:.1f}C"
+
+                if t_mean > self.config["temperature_threshold"]:
+                    self.send_command("lights", False, "bool")
+                    self.send_command("fan", 100, "percent")
+                    lcd_text += " AC:100%"
+                elif is_room_occupied:
+                    self.send_command("lights", True, "bool")
+                    self.send_command("fan", 0, "percent")
+                    lcd_text += " AC:0%"
+                else:
+                    # Nessuna presenza -> Tutto spento
+                    self.send_command("lights", False, "bool")
+                    self.send_command("fan", 0, "percent")
+                    lcd_text += " Vuota"
+
+                # Invia la stringa LCD già formattata da Python
+                self.send_command("lcd", lcd_text, "string")
+
+        except Exception as e:
+            print(f"[ERRORE] Errore nel processamento del messaggio: {e}")
+
+    def start(self):
+        # Avvio del thread separato per il Keep-Alive REST
+        self.keep_alive_thread = threading.Thread(target=self.register_and_keep_alive)
+        self.keep_alive_thread.daemon = True
+        self.keep_alive_thread.start()
+
+        self.client.connect(self.broker, self.port, 60)
+        self.client.loop_start()
         
-        if len(room_data["temp_history"]) == 10:
-            min_t = min(room_data["temp_history"])
-            max_t = max(room_data["temp_history"])
-            mean_t = sum(room_data["temp_history"]) / 10
-            
-            if mean_t > self.alert_threshold:
-                alert_msg = {
-                    "bn": f"smart_home/{room_name}/", 
-                    "e": [{"n": "alert", "t": time.time(), "v": "Temperatura media critica!", "u": "String"}]
-                }
-                self.client.publish(self.topic_alerts, json.dumps(alert_msg))
-                print(f">> [ALLARME] Temperatura critica in {room_name}! <<")
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            print("\n[SISTEMA] Arresto in corso...")
+            self.is_running = False
+            self.client.loop_stop()
+            self.client.disconnect()
 
-        self.evaluate_rules(room_name)
-        self.update_actuators_and_lcd(room_name, temp)
-
-    def evaluate_rules(self, room_name):
-        room_data = self._get_room_data(room_name)
-        if not room_data["temp_history"]: return
-        current_temp = room_data["temp_history"][-1]
-
-        if not room_data["motion"]:
-            self.send_led_command(room_name, False)
-        else:
-            if current_temp > self.temp_threshold:
-                self.send_led_command(room_name, False)
-            elif current_temp < self.temp_threshold:
-                self.send_led_command(room_name, True)
-
-    def send_led_command(self, room_name, state):
-        room_data = self._get_room_data(room_name)
-        
-        if room_data["led_state"] != state:
-            cmd = {
-                "bn": "smart_home/", 
-                "e": [{"n": f"{room_name}/lights", "t": time.time(), "v": state, "u": "bool"}]
-            }
-            self.client.publish(self.topic_commands, json.dumps(cmd))
-            room_data["led_state"] = state
-            print(f"[COMANDO] {room_name}: Luci {'ACCESE' if state else 'SPENTE'}")
-
-    def update_actuators_and_lcd(self, room_name, current_temp):
-        ac_min_setpoint = 25.0
-        ac_max_setpoint = 30.0
-        
-        if current_temp <= ac_min_setpoint:
-            ac_speed = 0
-        elif current_temp >= ac_max_setpoint:
-            ac_speed = 100
-        else:
-            ac_speed = int(((current_temp - ac_min_setpoint) / (ac_max_setpoint - ac_min_setpoint)) * 100)
-            
-        room_data = self._get_room_data(room_name)
-        
-        # Ottimizzazione e Invio comando Fan
-        if room_data["fan_speed"] != ac_speed:
-            fan_cmd = {
-                "bn": "smart_home/",
-                "e": [{"n": f"{room_name}/fan", "t": time.time(), "v": ac_speed, "u": "%"}]
-            }
-            self.client.publish(self.topic_commands, json.dumps(fan_cmd))
-            room_data["fan_speed"] = ac_speed
-            print(f"[COMANDO] {room_name}: Ventola al {ac_speed}%")
-
-        # Creiamo una stringa formattata da far leggere all'utente sullo schermino
-        new_lcd_text = f"T:{current_temp:.1f}C AC:{ac_speed}%"
-        
-        # Invia il messaggio MQTT solo se il testo sul display deve cambiare
-        if room_data["lcd_text"] != new_lcd_text:
-            lcd_cmd = {
-                "bn": "smart_home/",
-                "e": [{"n": f"{room_name}/lcd", "t": time.time(), "v": new_lcd_text, "u": "String"}]
-            }
-            self.client.publish(self.topic_commands, json.dumps(lcd_cmd))
-            room_data["lcd_text"] = new_lcd_text
-            print(f"[COMANDO] {room_name}: Aggiornato display LCD -> '{new_lcd_text}'")
-
-if __name__ == '__main__':
-    controller = SmartHomeController("Controller_Group12")
+if __name__ == "__main__":
+    controller = SmartHomeController()
     controller.start()
