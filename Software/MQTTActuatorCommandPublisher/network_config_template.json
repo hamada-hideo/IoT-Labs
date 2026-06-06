@@ -1,0 +1,10 @@
+{
+    "temperature_feedback_topic": "/tiot/group12/temperature/state",
+    "lights_feedback_topic": "/tiot/group12/lights/state",
+    "blinds_feedback_topic": "/tiot/group12/blinds/state",
+    "led_feedback_topic": "/tiot/group12/led/state",
+    "temperature_command_topic": "/tiot/group12/temperature/config",
+    "lights_command_topic": "/tiot/group12/lights/config",
+    "blinds_command_topic": "/tiot/group12/blinds/config",
+    "led_command_topic": "/tiot/group12/led/config"
+}
