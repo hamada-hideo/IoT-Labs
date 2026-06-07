@@ -3,6 +3,12 @@ import json
 import threading
 import time
 import os
+import sys
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(BASE_DIR)
+
+from Catalog.mqtt_catalog_bridge import *
 
 DIR = os.path.dirname(os.path.abspath(__file__))
 CATALOG_FILE = os.path.join(DIR, 'catalog.json')
@@ -28,6 +34,10 @@ class Catalog(object):
         self._load_catalog()
         # Avvia il thread in background per la pulizia dei record obsoleti
         threading.Thread(target=self._cleanup_loop, daemon=True).start()
+
+        self.mqtt_bridge = MQTTCatalogBridge(self)
+        threading.Thread(target=self.mqtt_bridge.run, daemon=True).start()
+
     def _load_catalog(self):
         with self.lock:
             if os.path.exists(CATALOG_FILE):
