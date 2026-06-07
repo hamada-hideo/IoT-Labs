@@ -276,7 +276,7 @@ class ActuatorControlWebServer:
                 # ma non facciamo crashare il server attuatori
                 print(f"Attenzione: Impossibile salvare il log. Errore: {e}")
                 self.logger_url_valid = False
-                threading.Thread(target=self.cc.try_get_url, args = ("LoggerWebServer", self._on_logger_url), daemon=True).start()
+                threading.Thread(target=self._try_get_logger_url, args = ("LoggerWebServer", self._on_logger_url), daemon=True).start()
         else:
             print(f"Attenzione: Impossibile salvare il log. Non è stato possibile ottenere l'url del logger.")
 

@@ -109,14 +109,14 @@ class TemperaturePublisher():
 
     def _build_senml(self,temperature):
         return json.dumps(
-            SenML.build_array_dict(
+            SenML.build_array_dict([
                 SenML.build_event_dict(
                     f"smart_home/{self.client_id}/temperature", 
                     "Cel", 
                     temperature, 
                     time.time()
                 )
-            )
+            ])
         )
 
     def _publish_loop(self):

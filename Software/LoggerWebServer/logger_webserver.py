@@ -3,58 +3,16 @@ import json
 import time
 import threading
 import os
-import paho.mqtt.client as mqtt
-import SenMLUtils as SenML
+import sys
 
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(BASE_DIR)
+
+import SenMLUtils as SenML
 from Catalog.catalog_client import CatalogClient
+from LoggerWebServer.mqtt_logger_bridge import MQTTLoggerBridge
 
 DIR = os.path.dirname(os.path.abspath(__file__))
-
-class MQTTLoggerBridge:
-    def __init__(self, logger_instance):
-        self.logger_service = logger_instance
-        
-        self.broker = "broker.emqx.io"
-        self.port = 1883
-        
-        self.client = mqtt.Client(
-            mqtt.CallbackAPIVersion.VERSION2, 
-            client_id=f"EventLog_Group12_{int(time.time())}"
-        )
-        self.client.on_connect = self.on_connect
-        self.client.on_message = self.on_message
-
-    def on_connect(self, client, userdata, flags, reason_code, properties):
-        if reason_code == 0:
-            print(f"[MQTT Logger] Connesso con successo al Broker su {self.broker}:{self.port}!")
-            self.client.subscribe("/tiot/group12/#")
-        else:
-            print(f"[MQTT Logger] Errore di connessione. Codice: {reason_code}")
-
-    def on_message(self, client, userdata, msg):
-        try:
-            payload = json.loads(msg.payload.decode("utf-8"))
-            
-            # Il Logger intercetta i dati MQTT e li passa al parser SenML
-            if SenML.validate_SenML(payload):
-                self.logger_service._process_SenML(payload)
-                print(f"[MQTT Logger] Evento salvato con successo da {msg.topic}")
-            else:
-                # Scarta silenziosamente il traffico non SenML (utile se il topic è affollato)
-                # print(f"[MQTT Logger - WARN] Messaggio non SenML scartato da {msg.topic}")
-                pass
-                
-        except json.JSONDecodeError:
-            print(f"[MQTT Logger - ERROR] Il payload da {msg.topic} non è un JSON valido.")
-        except Exception as e:
-            print(f"[MQTT Logger - ERROR] Eccezione durante l'elaborazione del messaggio: {e}")
-
-    def run(self):
-        try:
-            self.client.connect(self.broker, self.port, 60)
-            self.client.loop_start()
-        except Exception as e:
-            print(f"[MQTT Logger - ERROR] Impossibile avviare il client MQTT: {e}")
 
 class LoggerWebServer():
     exposed = True
@@ -63,12 +21,13 @@ class LoggerWebServer():
         self.log_file = os.path.join(DIR, "logs.json")
         if os.path.exists(self.log_file):
             with open(self.log_file, "r") as f:
-                self.logs = json.load(f)
+                data = json.load(f)
+            self.logs = data["logs"]
+            self.id_counter = data["id_counter"]
         else:
             self.logs = []
-            with open(self.log_file, "w") as f:
-                json.dump(self.logs, f, indent=4)
-        self.id_counter = 0
+            self.id_counter = 0
+            self._dump()
         self.lock = threading.Lock()
 
         self.ip = ip
@@ -92,7 +51,14 @@ class LoggerWebServer():
         
         # Facciamo partire il ponte MQTT che ascolta la rete
         self.mqtt_bridge = MQTTLoggerBridge(self)
-        self.mqtt_bridge.run()
+        threading.Thread(target=self.mqtt_bridge.run, daemon=True).start()
+
+    def _dump(self):
+        with open(self.log_file, "w") as f:
+            json.dump({
+                "logs": self.logs,
+                "id_counter": self.id_counter
+            }, f, indent=4)
 
     def _try_register_refresh_loop(self, payload, id):
         while True:
@@ -136,8 +102,7 @@ class LoggerWebServer():
         with self.lock:
             for event in flat_events:
                 ids.append(self._insert_new_log(SenML.build_array_dict([event])))
-                with open(self.log_file, "w") as f:
-                    json.dump(self.logs, f, indent=4)
+                self._dump()
         return ids
 
     def _insert_new_log(self, j):
@@ -158,8 +123,7 @@ class LoggerWebServer():
                 else:
                     res.append(log)
             self.logs = res
-            with open(self.log_file, "w") as f:
-                json.dump(self.logs, f, indent=4)
+            self._dump()
         return deleted
 
     def GET(self, *path, **query):
