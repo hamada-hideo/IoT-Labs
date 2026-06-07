@@ -6,8 +6,7 @@ import os
 import paho.mqtt.client as mqtt
 import SenMLUtils as SenML
 
-# Importiamo il client MQTT al posto di quello REST
-from Catalog.mqtt_catalog_client import MQTTCatalogClient
+from Catalog.catalog_client import CatalogClient
 
 DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -85,9 +84,7 @@ class LoggerWebServer():
             }
         }
 
-        # Istanziamo e connettiamo il MQTTCatalogClient per la discovery
-        self.cc = MQTTCatalogClient(self.id)
-        self.cc.connect()
+        self.cc = CatalogClient()
 
         self.registered = False
 

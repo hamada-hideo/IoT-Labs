@@ -2,10 +2,11 @@ import cherrypy
 import random
 import time
 import json
+import requests
 import threading
 import os
 import SenMLUtils as SenML
-from Catalog.mqtt_catalog_client import MQTTCatalogClient
+from Catalog.catalog_client import *
 
 DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -22,6 +23,7 @@ class SensorReadingWebServer(object):
         self.port = port
         self.endpoint = endpoint
         self.id = "SensorReadingWebServer"
+        self.logger_id = "LoggerWebServer"
         
         self.data = {
             "id": self.id,
@@ -34,10 +36,13 @@ class SensorReadingWebServer(object):
         }
         self.registered = False
 
-        self.cc = MQTTCatalogClient(self.id)
-        self.cc.connect()
+        self.cc = CatalogClient()
 
         threading.Thread(target=self._try_register_refresh_loop, daemon=True).start()
+
+        self.logger_url_valid = False
+        
+        threading.Thread(target=self._try_get_logger_url, daemon=True).start()
 
     def _try_register_refresh_loop(self):
         while True:
@@ -55,6 +60,16 @@ class SensorReadingWebServer(object):
                 else:
                     if not self.cc.refresh_device(self.devices_list[i]["device"]["id"]):
                         self.devices_list[i]["registered"] = False
+
+    def _try_get_logger_url(self):
+        while True:
+            time.sleep(self.cc.loop_time)
+            res = self.cc.get_service(self.logger_id)
+            if res:
+                url = res["rest"]["url"]
+                self.logger_url = url
+                self.logger_url_valid = True
+                break
 
     def _build_sensor_types(self):
         res = set()
@@ -147,7 +162,19 @@ class SensorReadingWebServer(object):
         events_array = self._generate_senml_events(rooms_to_read, sensors_to_read, is_room_specific)
         senml_document = SenML.build_array_dict(events_array, base_name, float(time.time()))
 
-        # PUBBLICAZIONE MQTT AGGIUNTA QUI
-        self.cc.client.publish("/tiot/group12/sensors/telemetry", json.dumps(senml_document))
+        if self.logger_url_valid:
+            try:
+                # Effettuiamo una POST locale all'endpoint del logger (es. porta 8080)
+                response = requests.post(self.logger_url, json=senml_document, timeout=2)
+                if response.status_code != 200:
+                    print(f"Attenzione: Impossibile salvare il log. Risposta del server: {response.status_code} - {response.text}")
+            except requests.exceptions.RequestException as e:
+                # Se il logger è spento, stampiamo l'errore su console 
+                # ma non facciamo crashare il server sensori
+                print(f"Attenzione: Impossibile salvare il log. Errore: {e}")
+                self.logger_url_valid = False
+                threading.Thread(target=self.cc.try_get_url, args = ("LoggerWebServer", self._on_logger_url), daemon=True).start()
+        else:
+            print(f"Attenzione: Impossibile salvare il log. Non è stato possibile ottenere l'url del logger.")
 
         return json.dumps(senml_document).encode('utf-8')

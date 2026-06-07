@@ -3,15 +3,5 @@
     "port": 8081,
     "sensors_endpoint": "sensors",
     "actuators_endpoint": "actuators",
-    "mqtt": {
-        "broker": {
-            "ip": "broker.emqx.io",
-            "port": 1883
-        },
-        "register_topic": "/tiot/group12/catalog/register",
-        "ack_topic": "/tiot/group12/catalog/ack/<id>",
-        "query_request_topic": "/tiot/group12/catalog/query/request",
-        "query_response_topic": "/tiot/group12/catalog/query/response"
-    },
     "expiration_time": 10
 }
