@@ -4,8 +4,14 @@ import time
 import requests
 import threading
 import os
+import sys
 import SenMLUtils as SenML
 from Catalog.catalog_client import *
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(BASE_DIR)
+
+from SensorReadingActuatorControlWebServer.mqtt_actuators_bridge import *
 
 DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -44,6 +50,9 @@ class ActuatorControlWebServer:
         self.logger_url_valid = False
         
         threading.Thread(target=self._try_get_logger_url, daemon=True).start()
+
+        self.mqtt_bridge = MQTTActuatorsControlBridge(self)
+        threading.Thread(target=self.mqtt_bridge.run, daemon=True).start()
 
     def _load_data(self):
         with open(self.config_file, "r") as f:
@@ -128,7 +137,7 @@ class ActuatorControlWebServer:
                         "id": f"{room}-{actuator}",
                         "description": f"{actuator} located in room {room}",
                         "resources": {
-                            "type": actuator,
+                            "type": self.state[room][actuator]["type"],
                             "unit": self.rules[self.state[room][actuator]["type"]]["unit"],
                             "min": self.rules[self.state[room][actuator]["type"]]["low"],
                             "max": self.rules[self.state[room][actuator]["type"]]["high"]

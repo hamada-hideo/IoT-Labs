@@ -2,13 +2,19 @@ import paho.mqtt.client as mqtt
 import time
 import json
 import threading
+import os
 
 import SenMLUtils as SenML
+
+DIR = os.path.dirname(os.path.abspath(__file__))
 
 class MQTTLoggerBridge:
     def __init__(self, logger_instance):
         self.logger_service = logger_instance
         self.catalog = logger_instance.cc
+        self.config_file = os.path.join(DIR, "network_config.json")
+        with open(self.config_file, "r") as f:
+            self.topic = json.load(f)["mqtt"]["sub_topic"]
         
         self.client = mqtt.Client(
             mqtt.CallbackAPIVersion.VERSION2, 
@@ -30,14 +36,14 @@ class MQTTLoggerBridge:
                 try:
                     self.client.connect(self.broker_host, self.broker_port)
                 except:
-                    print(f"[MQTT] Impossibile connettersi al broker su {self.broker_host}:{self.broker_port}")
+                    print(f"[MQTT Logger] Impossibile connettersi al broker su {self.broker_host}:{self.broker_port}")
                 self.broker_valid.set()
                 break
 
     def on_connect(self, client, userdata, flags, reason_code, properties):
         if reason_code == 0:
             print(f"[MQTT Logger] Connesso con successo al Broker su {self.broker_host}:{self.broker_port}!")
-            self.client.subscribe("/tiot/group12/#")
+            self.client.subscribe(self.topic)
         else:
             print(f"[MQTT Logger] Errore di connessione. Codice: {reason_code}")
 
@@ -69,7 +75,7 @@ class MQTTLoggerBridge:
         except KeyboardInterrupt:
             print("Shutting down...")
             self.running = False
-            self.client.unsubscribe("/tiot/group12/#")
+            self.client.unsubscribe(self.topic)
             self.client.loop_stop()
             self.client.disconnect()
             print("Disconnected")
