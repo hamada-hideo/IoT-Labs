@@ -58,8 +58,8 @@ class MQTTActuatorsControlBridge:
     def on_message(self, client, userdata, msg):
         try:
             payload = json.loads(msg.payload.decode("utf-8"))
-            self.service._process_SenML(payload)
             room, id = self._get_room_id_sensor_id(msg.topic)
+            self.service._process_SenML(payload, room, id)
             self.client.publish(
                 self.pub_topic.format(room = room, id = id), 
                 json.dumps({

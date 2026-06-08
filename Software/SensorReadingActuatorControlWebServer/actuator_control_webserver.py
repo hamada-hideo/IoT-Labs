@@ -221,11 +221,15 @@ class ActuatorControlWebServer:
         with open(self.state_file, "w") as f:
             json.dump(self.state, f, indent=4)
 
-    def _process_SenML(self, senml):
+    def _process_SenML(self, senml, room = None, id = None):
         flat_events = SenML.flatten_senml(senml)
         
         cnt = 0
         for event in flat_events:
+            if room and id:
+                event_room, event_id = self._get_room_id_device_id(event[SenML.NAME_KEY])
+                if room != event_room or id != event_id:
+                    continue
             if not self._validate_for_device(event):
                 raise cherrypy.HTTPError(400, "SenML content invalid")
             self._actuate(event)
