@@ -1,9 +1,9 @@
-#include <Scheduler.h>     // Libreria per simulare il multi-tasking
-#include <WiFiNINA.h>      // Necessaria per comunicare con il LED RGB interno
-// Uso di define per ridenominare i pin interni del LED RGB
+#include <Scheduler.h>     // Necessary Library to simulate multi-threading 
+#include <WiFiNINA.h>      // Necessary to communicate with built-in LED
+// Redefines the internal led pins for green and red 
 #define RLED_PIN LEDR
 #define GLED_PIN LEDG
-// Costanti globali per i semi-periodi
+// Global constats for the semi-periods
 const long R_HALF_PERIOD = 1500L;
 const long G_HALF_PERIOD = 3500L;
 int redLedState = LOW;
@@ -11,18 +11,19 @@ int greenLedState = LOW;
 void setup() {
   pinMode(RLED_PIN, OUTPUT);
   pinMode(GLED_PIN, OUTPUT);
-  // Avvia il secondo loop usando lo Scheduler (evita le ISR)
+  // Starts a second loop to avoid usage of ISRs 
   Scheduler.startLoop(loop2);
 }
 void loop() {
-  // Scrittura con type-casting a PinStatus obbligatorio per i pin NINA
+
+  // Write operations must use type-casting to PinStatus  for NINA pins
   digitalWrite(RLED_PIN, (PinStatus) redLedState);
   redLedState = !redLedState;
-  delay(R_HALF_PERIOD); // Rilascia il controllo al termine dell'operazione
+  delay(R_HALF_PERIOD); // Releases control at the end of the loop 
 }
 void loop2() {
-  // Scrittura con type-casting a PinStatus obbligatorio
+  // Same as before, the type-casting is necessary
   digitalWrite(GLED_PIN, (PinStatus) greenLedState);
   greenLedState = !greenLedState;
-  delay(G_HALF_PERIOD); // Rilascia il controllo per far eseguire l'altro loop
+  delay(G_HALF_PERIOD); // Releases control to make it so that the other loop can take control
 }

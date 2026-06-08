@@ -1,29 +1,29 @@
 #include <Wire.h>
-#include <LiquidCrystal_PCF8574.h> // Libreria richiesta dalle specifiche
-// Configurazione Sensore di Temperatura
+#include <LiquidCrystal_PCF8574.h> // Library required by the specs 
+// Config of temperature resistor 
 const int TEMP_PIN = A0; 
 const int B = 4275;               
 const float R0 = 100000.0;        
-// Inizializzazione del display LCD con indirizzo I2C.
-// Nota: l'indirizzo tipico dei moduli PCF8574 è 0x27 (o 0x3F).
+// Init of LCD display with I2C address
+// Note: standard address sfor PCF8574 modules is 0x27 (otherwise 0x3F) 
 LiquidCrystal_PCF8574 lcd(0x27);
 void setup() {
-  // Inizializza l'LCD definendo il numero di colonne e righe (16x2)
+  // Init of LCD defining the number of rows and colums (our case : 16x2)
   lcd.begin(16, 2);
   lcd.home();
   lcd.clear();
-  lcd.setBacklight(255); // Accende la retroilluminazione
+  lcd.setBacklight(255); // turns on backlighting 
   lcd.print("Temperature:");
 }
 void loop() {
-  // 1. Lettura e conversione analogica della temperatura
+  // 1. Reads the temperature and proceeds to analog conversion 
   int sensorValue = analogRead(TEMP_PIN);
   float R = 1023.0 / sensorValue - 1.0;
   R = R0 * R;
   float temperature = 1.0 / (log(R / R0) / B + 1 / 298.15) - 273.15; 
-  // 2. Aggiornamento del display LCD
+  // 2. Updates LCD display 
   lcd.print(temperature);
   lcd.setCursor(12, 0);
-  // 3. Attende 10 secondi prima della prossima lettura
+  // 3. waits 10 minutes before next temperature reading 
   delay(1000);
 }
