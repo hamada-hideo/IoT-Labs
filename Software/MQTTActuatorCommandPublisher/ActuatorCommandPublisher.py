@@ -29,10 +29,13 @@ class ActuatorCommandPublisher():
             data = json.load(f)
         self.feedback_topic = data["feedback_topic"]
         self.command_topic = data["command_topic"]
+        self.actuators_config_file = os.path.join(DIR, "actuators_config.json")
+        with open(self.actuators_config_file, "r") as f:
+            data = json.load(f)
         self.devices = data["devices"]
         self.rules = data["rules"]
         self.type_map = {
-            "bool": bool,
+            "bool": lambda x : x.lower() == "true",
             "int": int,
             "float": float
         }
