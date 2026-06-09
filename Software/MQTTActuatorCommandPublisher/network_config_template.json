@@ -1,10 +1,62 @@
 {
-    "temperature_feedback_topic": "/tiot/group12/temperature/state",
-    "lights_feedback_topic": "/tiot/group12/lights/state",
-    "blinds_feedback_topic": "/tiot/group12/blinds/state",
-    "led_feedback_topic": "/tiot/group12/led/state",
-    "temperature_command_topic": "/tiot/group12/temperature/config",
-    "lights_command_topic": "/tiot/group12/lights/config",
-    "blinds_command_topic": "/tiot/group12/blinds/config",
-    "led_command_topic": "/tiot/group12/led/config"
+    "feedback_topic": "/tiot/group12/smart_home/{room}/{id}/state",
+    "command_topic": "/tiot/group12/smart_home/{room}/{id}/config",
+    "devices": {
+        "living_room": {
+            "thermostat": {
+                "type": "thermostat"
+            },
+            "lights": {
+                "type": "lights"
+            },
+            "blinds": {
+                "type": "blinds"
+            }
+        },
+        "kitchen": {
+            "thermostat": {
+                "type": "thermostat"
+            },
+            "lights": {
+                "type": "lights"
+            },
+            "blinds": {
+                "type": "blinds"
+            }
+        },
+        "bedroom": {
+            "thermostat": {
+                "type": "thermostat"
+            },
+            "lights": {
+                "type": "lights"
+            },
+            "blinds": {
+                "type": "blinds"
+            }
+        },
+        "arduino": {
+            "led": {
+                "type": "led"
+            }
+        }
+    },
+    "rules": {
+        "thermostat": {
+            "unit": "Cel",
+            "value_type": "int"
+        },
+        "lights": {
+            "unit": "bool",
+            "value_type": "bool"
+        },
+        "blinds": {
+            "unit": "%",
+            "value_type": "int"
+        },
+        "led": {
+            "unit": "bool",
+            "value_type": "bool"
+        }
+    }
 }

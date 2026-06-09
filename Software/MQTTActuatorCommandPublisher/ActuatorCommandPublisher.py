@@ -16,6 +16,8 @@ import json
 import time
 import threading
 
+import SenMLUtils as SenML
+
 from Catalog.catalog_client import *
 
 DIR = os.path.dirname(os.path.abspath(__file__))
@@ -25,14 +27,15 @@ class ActuatorCommandPublisher():
         self.config_file = os.path.join(DIR, "network_config.json")
         with open(self.config_file, "r") as f:
             data = json.load(f)
-        self.temperature_feedback_topic = data["temperature_feedback_topic"]
-        self.lights_feedback_topic = data["lights_feedback_topic"]
-        self.blinds_feedback_topic = data["blinds_feedback_topic"]
-        self.led_feedback_topic = data["led_feedback_topic"]
-        self.temperature_command_topic = data["temperature_command_topic"]
-        self.lights_command_topic = data["lights_command_topic"]
-        self.blinds_command_topic = data["blinds_command_topic"]
-        self.led_command_topic = data["led_command_topic"]
+        self.feedback_topic = data["feedback_topic"]
+        self.command_topic = data["command_topic"]
+        self.devices = data["devices"]
+        self.rules = data["rules"]
+        self.type_map = {
+            "bool": bool,
+            "int": int,
+            "float": float
+        }
         
         self.catalog = CatalogClient()
 
@@ -56,11 +59,11 @@ class ActuatorCommandPublisher():
         while True:
             time.sleep(self.catalog.loop_time)
             if not self.registered:
-                if self.catalog.register_device(self.payload):
+                if self.catalog.register_service(self.payload):
                     self.registered = True
                     print(f"[{time.strftime('%X')}] Registration successful for {self.client_id}")
             else:
-                if not self.catalog.refresh_device(self.client_id):
+                if not self.catalog.refresh_service(self.client_id):
                     self.registered = False
                     print(f"[{time.strftime('%X')}] Refresh failed, retrying next cycle")
                 else:
@@ -82,12 +85,8 @@ class ActuatorCommandPublisher():
             print(f"Connection failed with error code {rc}")
             return
         self.client.subscribe([
-            (self.temperature_feedback_topic, 2), 
-            (self.lights_feedback_topic, 2), 
-            (self.blinds_feedback_topic, 2), 
-            (self.led_feedback_topic, 2)
+            (self.feedback_topic.format(room = room, id = id), 2) for room in self.devices for id in self.devices[room]
         ])
-        print(f"Subscribed to feedback topics: {self.temperature_feedback_topic}, {self.lights_feedback_topic}, {self.blinds_feedback_topic}, {self.led_feedback_topic}")
 
     def on_message(self,client,userdata,msg):
         topic = msg.topic
@@ -97,16 +96,7 @@ class ActuatorCommandPublisher():
         except json.JSONDecodeError:
             print(f"Malformed feedback received on {topic}")
             return
-        if topic == self.temperature_feedback_topic:
-            print(f"[THERMOSTAT FEEDBACK] {data}")
-        elif topic == self.lights_feedback_topic:
-            print(f"[LIGHTS FEEDBACK] {data}")
-        elif topic == self.blinds_feedback_topic:
-            print(f"[BLINDS FEEDBACK] {data}")
-        elif topic == self.led_feedback_topic:
-            print(f"[LED FEEDBACK] {data}")
-        else:
-            print(f"[UNKNOWN FEEDBACK] topic: {topic} - {data}")
+        print(f"FEEDBACK received on {msg.topic}: {data}")
 
     def _build_registration_payload(self):
         return{
@@ -119,16 +109,10 @@ class ActuatorCommandPublisher():
                 },
                 "topics": {
                     "commands": [
-                        self.temperature_command_topic,
-                        self.lights_command_topic,
-                        self.blinds_command_topic,
-                        self.led_command_topic
+                        self.command_topic.format(room = room, id = id) for room in self.devices for id in self.devices[room]
                     ],
                     "feedback":[
-                        self.temperature_feedback_topic,
-                        self.lights_feedback_topic,
-                        self.blinds_feedback_topic,
-                        self.led_feedback_topic
+                        self.feedback_topic.format(room = room, id = id) for room in self.devices for id in self.devices[room]
                     ]
                 }
             },
@@ -145,51 +129,38 @@ class ActuatorCommandPublisher():
         print(f"[{time.strftime('%X')}] Actuator Command Publisher started")
         while self.running:
             try:
-                print("\n--- MQTT PUBLISHER MENU ---")
-                print("1. Send command to the thermostat")
-                print("2. Send command to the blinds")
-                print("3. Send command to the lights")
-                print("4. Send command to the LED")
+                print("\n--- MQTT PUBLISHER ---")
+                print(f"Select room {[room for room in self.devices]}:")
+                room = input("> ")
+                if room not in self.devices:
+                    print("Invalid choice")
+                    continue
 
-                choice = input("Select an option: ").strip()
+                print(f"Select actuator {[actuator for actuator in self.devices[room]]}:")
+                actuator = input(">")
+                if actuator not in self.devices[room]:
+                    print("Invalid choice")
+                    continue
 
-                if choice == "1":
-                    temp = input("Enter target temperature (Celsius degrees):").strip()
-                    self._send_command(self.temperature_command_topic,{"temperature": float(temp)})
+                actuator_type = self.devices[room][actuator]["type"]
 
-                elif choice == "2":
-                    status = input("Lights on or off? (on/off):").strip()
-                    self._send_command(self.lights_command_topic, {"status": status})
-
-                elif choice == "3":
-                    position = input("Enter blinds position (0-100): ").strip()
-                    self._send_command(self.blinds_command_topic, {"position": int(position)})
-                elif choice == "4":
-                    status = input("LED on or off? (on/off): ").strip()
-                    self._send_command(self.led_command_topic, {"status":status})
-
-                elif choice == "5":
-                    self.running = False
-                    self.client.unsubscribe([
-                        self.temperature_feedback_topic, 
-                        self.lights_feedback_topic, 
-                        self.blinds_feedback_topic, 
-                        self.led_feedback_topic
-                    ])
-                    self.client.loop_stop()
-                    self.client.disconnect()
-                    print("Disconnected")
-                else:
-                    print("Invalid option,try again.")
+                print(f"Insert the value for actuator {actuator} in room {room}:")
+                value = input("> ")
+                self._send_command(
+                    self.command_topic.format(room = room, id = actuator),
+                    SenML.build_array_dict([SenML.build_event_dict(
+                        f"smart_home/{room}/{actuator}",
+                        self.rules[actuator_type]["unit"],
+                        self.type_map[self.rules[actuator_type]["value_type"]](value),
+                        time.time()
+                    )])
+                )
 
             except KeyboardInterrupt:
                 print("Shutting down...")
                 self.running = False
                 self.client.unsubscribe([
-                    self.temperature_feedback_topic, 
-                    self.lights_feedback_topic, 
-                    self.blinds_feedback_topic, 
-                    self.led_feedback_topic
+                    self.feedback_topic.format(room = room, id = id) for room in self.devices for id in self.devices[room]
                 ])
                 self.client.loop_stop()
                 self.client.disconnect()

@@ -51,7 +51,7 @@ class MQTTActuatorsControlBridge:
         if reason_code == 0:
             print(f"[MQTT Actuators Control] Connesso con successo al Broker su {self.broker_host}:{self.broker_port}!")
             self.client.subscribe([(self.sub_topic.format(room = room, id = id), 2) for room in self.service.state for id in self.service.state[room]])
-            print(f"[MQTT Actuators Control] Subscribed to topic {self.sub_topic}")
+            print(f"[MQTT Actuators Control] Subscribed to {[self.sub_topic.format(room = room, id = id) for room in self.service.state for id in self.service.state[room]]}")
         else:
             print(f"[MQTT Actuators Control] Errore di connessione. Codice: {reason_code}")
 
