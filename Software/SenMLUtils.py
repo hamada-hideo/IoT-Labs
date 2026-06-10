@@ -26,7 +26,7 @@ def validate_SenML(j):
                 return False
         return True
     except Exception as e:
-        print(e)
+        print(f"Error during SenML validation: {str(e)}")
         return False
 
 def build_event_dict(name, unit, value, time):

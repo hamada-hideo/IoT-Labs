@@ -1,0 +1,18 @@
+{
+    "thermostat": {
+        "unit": "Cel",
+        "value_type": "int"
+    },
+    "lights": {
+        "unit": "bool",
+        "value_type": "bool"
+    },
+    "blinds": {
+        "unit": "%",
+        "value_type": "int"
+    },
+    "led": {
+        "unit": "bool",
+        "value_type": "bool"
+    }
+}

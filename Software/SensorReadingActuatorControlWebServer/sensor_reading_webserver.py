@@ -14,23 +14,23 @@ class SensorReadingWebServer(object):
     exposed = True
 
     def __init__(self, ip, port, endpoint):
-
         with open(os.path.join(DIR, "sensors_config.json"), "r") as f:
             self.resources = json.load(f)
         self.sensor_types = self._build_sensor_types()
-        self.devices_list = self._build_devices_list()
 
         self.ip = ip
         self.port = port
         self.endpoint = endpoint
         self.id = "SensorReadingWebServer"
         self.logger_id = "LoggerWebServer"
+
+        self.devices_list = self._build_devices_list()
+        
         self.data = {
             "id": self.id,
             "description": "Service that exposes reads from the smart home sensors",
             "rest": {
-                "url": f"http://{self.ip}:{self.port}/{self.endpoint}",
-                "method": "GET"
+                "url": f"http://{self.ip}:{self.port}/{self.endpoint}"
             },
             "resources": self._build_resource_list()
         }
@@ -84,9 +84,12 @@ class SensorReadingWebServer(object):
             for sensor in self.resources[room]:
                 res.append({
                     "device": {
-                        "id": f"{room}-{sensor}",
+                        "id": f"{room}/{sensor}",
                         "description": f"{sensor} sensor located in room {room}",
-                        "resources": self.resources[room][sensor]
+                        "resources": self.resources[room][sensor],
+                        "rest": {
+                            "url": f"http://{self.ip}:{self.port}/{self.endpoint}/{room}/{sensor}"
+                        }
                     },
                     "registered": False
                 })
@@ -173,9 +176,8 @@ class SensorReadingWebServer(object):
                 # ma non facciamo crashare il server sensori
                 print(f"Attenzione: Impossibile salvare il log. Errore: {e}")
                 self.logger_url_valid = False
-                threading.Thread(target=self.cc.try_get_url, args = ("LoggerWebServer", self._on_logger_url), daemon=True).start()
+                threading.Thread(target=self._try_get_logger_url, args = ("LoggerWebServer", self._on_logger_url), daemon=True).start()
         else:
             print(f"Attenzione: Impossibile salvare il log. Non è stato possibile ottenere l'url del logger.")
 
-        # Risposta finale al client che ha fatto la GET
         return json.dumps(senml_document).encode('utf-8')

@@ -3,8 +3,14 @@ import json
 import time
 import threading
 import os
+import sys
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(BASE_DIR)
+
 import SenMLUtils as SenML
 from Catalog.catalog_client import CatalogClient
+from LoggerWebServer.mqtt_logger_bridge import MQTTLoggerBridge
 
 DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -15,32 +21,47 @@ class LoggerWebServer():
         self.log_file = os.path.join(DIR, "logs.json")
         if os.path.exists(self.log_file):
             with open(self.log_file, "r") as f:
-                self.logs = json.load(f)
+                data = json.load(f)
+            self.logs = data["logs"]
+            self.id_counter = data["id_counter"]
         else:
             self.logs = []
-            with open(self.log_file, "w") as f:
-                json.dump(self.logs, f, indent=4)
-        self.id_counter = 0
+            self.id_counter = 0
+            self._dump()
         self.lock = threading.Lock()
 
         self.ip = ip
         self.port = port
         self.endpoint = endpoint
         self.id = "LoggerWebServer"
+
+        self.cc = CatalogClient()
+
+        # Facciamo partire il ponte MQTT che ascolta la rete
+        self.mqtt_bridge = MQTTLoggerBridge(self)
+        threading.Thread(target=self.mqtt_bridge.run, daemon=True).start()
+
         self.data = {
             "id": self.id,
             "description": "Service that logs commands sent to actuators and data received from sensors in the smart home",
             "rest": {
-                "url": f"http://{self.ip}:{self.port}/{self.endpoint}",
-                "method": ["GET", "POST", "DELETE"]
+                "url": f"http://{self.ip}:{self.port}/{self.endpoint}"
+            },
+            "mqtt": {
+                "sub_topic": self.mqtt_bridge.topic
             }
         }
-
-        self.cc = CatalogClient()
 
         self.registered = False
 
         threading.Thread(target=self._try_register_refresh_loop, args = (self.data, self.id), daemon=True).start()
+
+    def _dump(self):
+        with open(self.log_file, "w") as f:
+            json.dump({
+                "logs": self.logs,
+                "id_counter": self.id_counter
+            }, f, indent=4)
 
     def _try_register_refresh_loop(self, payload, id):
         while True:
@@ -69,30 +90,22 @@ class LoggerWebServer():
         with self.lock:
             for log in self.logs:
                 event = log[SenML.EVENTS_KEY][0]
-
-                # Controlla se la stanza è presente nel nome assoluto (bn+n)
                 room_name = self._get_room_name(event[SenML.NAME_KEY])
                 match_room = (room is None) or (room_name == room)
-                
-                # Controlla il tempo assoluto dell'evento (bt+t)
                 match_since = (since is None) or (event[SenML.TIME_KEY] >= since)
                 match_before = (before is None) or (event[SenML.TIME_KEY] < before)
                 
                 if match_room and match_since and match_before:
                     res.append(log)
-
         return res
     
     def _process_SenML(self, senml):
-        # Usa la funzione dal tuo modulo SenMLUtils
         flat_events = SenML.flatten_senml(senml)
-        
         ids = []
         with self.lock:
             for event in flat_events:
                 ids.append(self._insert_new_log(SenML.build_array_dict([event])))
-                with open(self.log_file, "w") as f:
-                    json.dump(self.logs, f, indent=4)
+                self._dump()
         return ids
 
     def _insert_new_log(self, j):
@@ -100,7 +113,6 @@ class LoggerWebServer():
         self.id_counter += 1
         j["epoch"] = time.time()
         j["id"] = id
-        # Attenzione: responsabilità del mutex alla funzione chiamante
         self.logs.append(j)
         return id
     
@@ -114,8 +126,7 @@ class LoggerWebServer():
                 else:
                     res.append(log)
             self.logs = res
-            with open(self.log_file, "w") as f:
-                json.dump(self.log, f, indent=4)
+            self._dump()
         return deleted
 
     def GET(self, *path, **query):

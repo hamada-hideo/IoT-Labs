@@ -21,7 +21,10 @@ class MQTTCatalogClient:
         self.query_response_topic = data["mqtt"]["query_response_topic"]
         self.loop_time = data["expiration_time"] // 2
 
-        self.client = mqtt.Client(client_id=f"tiot-group12-MQTTCatalogClient-{id}")
+        # UUID aggiunto per garantire che ogni client sia unico sul broker
+        unique_client_id = f"tiot-group12-MQTTCatalogClient-{id}-{uuid.uuid4().hex[:6]}"
+        
+        self.client = mqtt.Client(client_id=unique_client_id)
         self.client.on_connect = self._on_connect
         self.client.on_message = self._on_message
         
@@ -32,7 +35,7 @@ class MQTTCatalogClient:
 
     def _on_connect(self, client, userdata, flags, rc):
         if rc == 0:
-            print("\n[MQTT] Successfully connected to the Broker!")
+            print(f"\n[MQTT] Successfully connected to the Broker (Client: {self.ack_topic})")
             self.client.subscribe([(self.ack_topic, 2), (self.query_response_topic, 2)])
             self._connected_event.set()
         else:
@@ -48,7 +51,8 @@ class MQTTCatalogClient:
 
             with self.lock:
                 if request_id in self.pending_requests:
-                    self.pending_requests[request_id]["response"] = payload["data"]
+                    # Estrazione sicura del payload tramite .get()
+                    self.pending_requests[request_id]["response"] = payload.get("data", payload)
                     self.pending_requests[request_id]["event"].set()
 
         except Exception as e:
@@ -86,7 +90,6 @@ class MQTTCatalogClient:
         }
         return self._send_request(self.query_request_topic, payload)
 
-    
     def get_services(self):
         payload = {
             "action": "get_services"

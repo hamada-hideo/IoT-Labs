@@ -160,9 +160,3 @@ class MQTTCatalogBridge:
             ack_message["request_id"] = request_id
         self.client.publish(response_topic, json.dumps(ack_message))
         print(f"[MQTT] ACK inviato sul topic: {response_topic}")
-
-# Questo va in fondo al file mqtt_catalog_bridge.py, al posto del vecchio blocco 'if __name__ == "__main__":'
-def start_mqtt_bridge(catalog_instance):
-    # Passiamo l'istanza del catalogo già creata dal main
-    bridge = MQTTCatalogBridge(catalog_instance)
-    bridge.run()

@@ -4,8 +4,14 @@ import time
 import requests
 import threading
 import os
+import sys
 import SenMLUtils as SenML
 from Catalog.catalog_client import *
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(BASE_DIR)
+
+from SensorReadingActuatorControlWebServer.mqtt_actuators_bridge import *
 
 DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -18,20 +24,19 @@ class ActuatorControlWebServer:
         self._load_data()
         self.lock = threading.Lock()
 
-        self.devices_list = self._build_devices_list()
-
         self.ip = ip
         self.port = port
         self.endpoint = endpoint
         self.id = "ActuatorControlWebServer"
         self.logger_id = "LoggerWebServer"
 
+        self.devices_list = self._build_devices_list()
+
         self.data = {
             "id": self.id,
             "description": "Service that forwards commands to smart home actuators",
             "rest": {
-                "url": f"http://{self.ip}:{self.port}/{self.endpoint}",
-                "method": ["GET", "POST"]
+                "url": f"http://{self.ip}:{self.port}/{self.endpoint}"
             },
             "resources": self._build_resource_list()
         }
@@ -45,9 +50,8 @@ class ActuatorControlWebServer:
         
         threading.Thread(target=self._try_get_logger_url, daemon=True).start()
 
-    # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
+        self.mqtt_bridge = MQTTActuatorsControlBridge(self)
+        threading.Thread(target=self.mqtt_bridge.run, daemon=True).start()
 
     def _load_data(self):
         with open(self.config_file, "r") as f:
@@ -129,13 +133,20 @@ class ActuatorControlWebServer:
             for actuator in self.state[room]:
                 res.append({
                     "device": {
-                        "id": f"{room}-{actuator}",
+                        "id": f"{room}/{actuator}",
                         "description": f"{actuator} located in room {room}",
                         "resources": {
-                            "type": actuator,
+                            "type": self.state[room][actuator]["type"],
                             "unit": self.rules[self.state[room][actuator]["type"]]["unit"],
                             "min": self.rules[self.state[room][actuator]["type"]]["low"],
                             "max": self.rules[self.state[room][actuator]["type"]]["high"]
+                        },
+                        "mqtt": {
+                            "command_topic": f"/tiot/group12/smart_home/{room}/{actuator}/config",
+                            "feedback_topic": f"/tiot/group12/smart_home/{room}/{actuator}/state"
+                        },
+                        "rest": {
+                            "url": f"http://{self.ip}:{self.port}/{self.endpoint}/{room}/{actuator}"
                         }
                     },
                     "registered": False
@@ -211,18 +222,20 @@ class ActuatorControlWebServer:
 
     def _actuate(self, command):
         room_id, device_id = self._get_room_id_device_id(command[SenML.NAME_KEY])
-        # Attenzione: responsabilità del lock al chiamante
         self.state[room_id][device_id]["v"] = command[SenML.VALUE_KEY]
         self.state[room_id][device_id]["t"] = time.time()
         with open(self.state_file, "w") as f:
             json.dump(self.state, f, indent=4)
 
-    def _process_SenML(self, senml):
-        # Usa la funzione dal tuo modulo SenMLUtils
+    def _process_SenML(self, senml, room = None, id = None):
         flat_events = SenML.flatten_senml(senml)
         
         cnt = 0
         for event in flat_events:
+            if room and id:
+                event_room, event_id = self._get_room_id_device_id(event[SenML.NAME_KEY])
+                if room != event_room or id != event_id:
+                    continue
             if not self._validate_for_device(event):
                 raise cherrypy.HTTPError(400, "SenML content invalid")
             self._actuate(event)
@@ -230,27 +243,15 @@ class ActuatorControlWebServer:
         
         return cnt
         
-    # ------------------------------------------------------------------
-    # GET
-    # ------------------------------------------------------------------
-
     def GET(self, *uri, **params):
-        """
-        GET /actuators                        → list all devices
-        GET /actuators/<room>                 → list all devices in a room
-        GET /actuators/<room>/<device_id>     → get a specific device
-        """
-
         if len(params) > 0:
             raise cherrypy.HTTPError(400, f"Unknown parameters: {[k for k in params.keys()]}")
         
         clean = [seg for seg in uri if seg.strip()]
 
-        # ── CASE 0: /actuators 
         if len(clean) == 0:
             return json.dumps(self._get_all()).encode("utf-8")
 
-        # ── CASE 1: /actuators/<room> 
         room_id = clean[0]
         if room_id not in self.state:
             raise cherrypy.HTTPError(404, json.dumps({"error": f"Room '{room_id}' not found"}))
@@ -258,24 +259,16 @@ class ActuatorControlWebServer:
         if len(clean) == 1:
             return json.dumps(self._get_by_room(room_id)).encode("utf-8")
 
-        # ── CASE 2: /actuators/<room>/<device_id> 
         if len(clean) == 2:
             device_id = clean[1]
             if device_id not in self.state[room_id]:
                 raise cherrypy.HTTPError(404, json.dumps({"error": f"Device '{device_id}' not found in room '{room_id}'"}))
             return json.dumps(self._get_by_room_and_device(room_id, device_id)).encode("utf-8")
 
-
-        # ── CASE ERROR: too many segments 
         raise cherrypy.HTTPError(400, "URI format: /actuators[/<room>[/<device_id>]]")
 
 
-    #--- POST -----
     def POST(self,*uri,**params):
-        """
-        POST /actuators with SenML payload
-        """
-
         if len(uri) > 0:
             raise cherrypy.HTTPError(404, "URI too specific")
         if len(params) > 0:
@@ -302,7 +295,9 @@ class ActuatorControlWebServer:
                 # ma non facciamo crashare il server attuatori
                 print(f"Attenzione: Impossibile salvare il log. Errore: {e}")
                 self.logger_url_valid = False
-                threading.Thread(target=self.cc.try_get_url, args = ("LoggerWebServer", self._on_logger_url), daemon=True).start()
+                threading.Thread(target=self._try_get_logger_url, args = ("LoggerWebServer", self._on_logger_url), daemon=True).start()
+        else:
+            print(f"Attenzione: Impossibile salvare il log. Non è stato possibile ottenere l'url del logger.")
 
         return json.dumps({
             "message": f"Executed {cnt} commands"
