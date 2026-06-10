@@ -1,60 +1,18 @@
 {
-    "devices": {
-        "living_room": {
-            "thermostat": {
-                "type": "thermostat"
-            },
-            "lights": {
-                "type": "lights"
-            },
-            "blinds": {
-                "type": "blinds"
-            }
-        },
-        "kitchen": {
-            "thermostat": {
-                "type": "thermostat"
-            },
-            "lights": {
-                "type": "lights"
-            },
-            "blinds": {
-                "type": "blinds"
-            }
-        },
-        "bedroom": {
-            "thermostat": {
-                "type": "thermostat"
-            },
-            "lights": {
-                "type": "lights"
-            },
-            "blinds": {
-                "type": "blinds"
-            }
-        },
-        "arduino": {
-            "led": {
-                "type": "led"
-            }
-        }
+    "thermostat": {
+        "unit": "Cel",
+        "value_type": "int"
     },
-    "rules": {
-        "thermostat": {
-            "unit": "Cel",
-            "value_type": "int"
-        },
-        "lights": {
-            "unit": "bool",
-            "value_type": "bool"
-        },
-        "blinds": {
-            "unit": "%",
-            "value_type": "int"
-        },
-        "led": {
-            "unit": "bool",
-            "value_type": "bool"
-        }
+    "lights": {
+        "unit": "bool",
+        "value_type": "bool"
+    },
+    "blinds": {
+        "unit": "%",
+        "value_type": "int"
+    },
+    "led": {
+        "unit": "bool",
+        "value_type": "bool"
     }
 }

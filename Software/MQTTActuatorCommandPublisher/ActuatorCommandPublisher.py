@@ -26,8 +26,7 @@ class ActuatorCommandPublisher():
     def __init__(self):
         self.actuators_config_file = os.path.join(DIR, "actuators_config.json")
         with open(self.actuators_config_file, "r") as f:
-            data = json.load(f)
-        self.rules = data["rules"]
+            self.rules = json.load(f)
         self.type_map = {
             "bool": lambda x : x.lower() == "true",
             "int": int,
