@@ -10,11 +10,10 @@
 char ssid[] = SECRET_SSID; 
 char pass[] = SECRET_PASS; 
 
-// Indirizzo del Catalogo REST
-const char* catalog_address = "192.168.1.100"; 
+// --- INSERISCI QUI IL VERO IP DEL TUO PC (Verificalo con ipconfig) ---
+const char* catalog_address = "10.65.201.158"; 
 int catalog_port = 8080; 
 
-// Stringhe dinamiche che verranno riempite tramite la GET REST
 String broker_address = "";
 int broker_port = 1883;
 
@@ -25,10 +24,9 @@ WiFiClient wifi;
 PubSubClient mqtt_client(wifi); 
 HttpClient http_client = HttpClient(wifi, catalog_address, catalog_port);
 
-// Buffer allocati correttamente per evitare overflow
-StaticJsonDocument<512> doc_catalog_rx; // Più grande per ospitare la risposta del catalogo
+StaticJsonDocument<512> doc_catalog_rx; 
 StaticJsonDocument<384> doc_snd; 
-StaticJsonDocument<256> doc_rec; 
+StaticJsonDocument<512> doc_rec;  // Buffer esteso per payload MQTT complessi
 StaticJsonDocument<256> doc_reg; 
 
 LiquidCrystal_PCF8574 lcd(0x27);
@@ -43,7 +41,6 @@ short sampleBuffer[256];
 volatile int samplesRead = 0;
 float current_noise_peak = 0.0;
 
-// Configurazione algoritmi audio locali (Edge Computing)
 float clapThresh = 30000.0; 
 int nClaps = 2;
 int clapInterval = 3000; 
@@ -67,7 +64,6 @@ void setup() {
   lcd.clear();
   lcd.print("Connessione...");
 
-  // Connessione Wi-Fi
   while (WiFi.begin(ssid, pass) != WL_CONNECTED) {
     delay(1000);
     Serial.println("Connessione al WiFi...");
@@ -78,32 +74,38 @@ void setup() {
   PDM.onReceive(onPDMdata);
   PDM.begin(1, 16000);
 
-  // RECUPERO INFORMAZIONI BROKER VIA REST GET 
+  // --- GET INFO BROKER --- 
   Serial.println("Recupero info broker dal Catalogo...");
-  http_client.get("/catalog"); // Esegue la GET all'endpoint principale del catalogo
+  http_client.get("/catalog/broker"); 
   
   int get_statusCode = http_client.responseStatusCode();
   String get_response = http_client.responseBody();
+  http_client.stop(); // Previene il blocco della scheda e i riavvii infiniti
 
   if (get_statusCode == 200) {
     DeserializationError err = deserializeJson(doc_catalog_rx, get_response);
     if (!err) {
-      // Estrazione dinamica dei parametri del broker inviati dal catalogo
-      broker_address = doc_catalog_rx["broker_address"].as<String>();
-      broker_port = doc_catalog_rx["broker_port"].as<int>();
+      broker_address = doc_catalog_rx["ip"].as<String>();
+      broker_port = doc_catalog_rx["port"].as<int>();
+      
+      if (broker_address == "null" || broker_port == 0) {
+        Serial.println("Valori nulli dal server! Forzo fallback a broker.emqx.io");
+        broker_address = "broker.emqx.io";
+        broker_port = 1883;
+      }
       
       Serial.print("[REST GET] Broker ottenuto: "); Serial.print(broker_address);
       Serial.print(":"); Serial.println(broker_port);
     } else {
-      Serial.println("Errore nel parsing del JSON del Catalogo. Uso fallback.");
-      broker_address = "broker.emqx.io"; // Fallback di sicurezza
+      Serial.println("Errore parsing JSON! Uso fallback.");
+      broker_address = "broker.emqx.io"; 
     }
   } else {
-    Serial.println("Impossibile connettersi al Catalogo via REST. Uso fallback.");
+    Serial.println("Errore HTTP! Uso fallback.");
     broker_address = "broker.emqx.io";
   }
 
-  // REGISTRAZIONE DEL DEVICE VIA REST POST
+  // --- POST REGISTRAZIONE ---
   doc_reg.clear();
   doc_reg["id"] = device_id;
   doc_reg["description"] = "Arduino RP2040 Edge Node definitivo";
@@ -114,13 +116,23 @@ void setup() {
 
   String reg_body;
   serializeJson(doc_reg, reg_body);
+  
+  Serial.println("Invio registrazione POST...");
   http_client.post("/catalog/devices", "application/json", reg_body);
   
-  if (http_client.responseStatusCode() == 200) {
+  int post_statusCode = http_client.responseStatusCode();
+  http_client.responseBody(); 
+  http_client.stop();
+
+  if (post_statusCode == 200 || post_statusCode == 201) {
+    Serial.println("Registrazione andata a buon fine!");
     lcd.clear(); lcd.print("Reg. REST OK!"); delay(1000);
+  } else {
+    Serial.print("Errore registrazione sul server. Codice: ");
+    Serial.println(post_statusCode);
   }
 
-  // CONFIGURAZIONE DINAMICA CLIENT MQTT
+  // CONFIGURAZIONE MQTT
   mqtt_client.setServer(broker_address.c_str(), broker_port);
   mqtt_client.setCallback(callback);
 }
@@ -131,7 +143,6 @@ void loop() {
   }
   mqtt_client.loop(); 
 
-  // Analisi del segnale audio locale ad alta frequenza
   if (samplesRead) {
     static int k = 0; 
     static unsigned long begTime = 0;
@@ -149,7 +160,6 @@ void loop() {
         lastClapTime = millis();
 
         if(k % nClaps == 0 && (lastClapTime - begTime) < clapInterval) {
-          // Generazione e pubblicazione dell'evento leggero asincrono "una tantum"
           StaticJsonDocument<256> doc_event;
           doc_event["bn"] = "smart_home/living_room/";
           JsonArray ev_arr = doc_event.createNestedArray("e");
@@ -174,7 +184,6 @@ void loop() {
 
   if (!isRunning) return; 
 
-  // Pubblicazione standard periodica
   if (millis() - last_publish > 10000) { 
     int raw_temp = 25; 
     if (IMU.temperatureAvailable()) IMU.readTemperature(raw_temp);
@@ -213,14 +222,17 @@ void onPDMdata() {
   samplesRead = bytesAvailable / 2;
 }
 
-// Ricezione comandi ed esecuzione passiva cieca
 void callback(char* topic, byte* payload, unsigned int length) { 
   DeserializationError err = deserializeJson(doc_rec, (char*) payload); 
-  if (err) return; 
+  if (err) {
+    Serial.print("Errore JSON: ");
+    Serial.println(err.c_str());
+    return; 
+  }
 
   String n_field = doc_rec["e"][0]["n"].as<String>(); 
 
-  if (n_field.endsWith("system")) {
+  if (n_field == "system") {
     isRunning = doc_rec["e"][0]["v"].as<bool>();
     if (!isRunning) {
       digitalWrite(LED_PIN, LOW); digitalWrite(GLED_PIN, LOW); analogWrite(FAN_PIN, 0);
@@ -233,32 +245,52 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
   if (!isRunning) return;
 
-  if (n_field.endsWith("lights")) { 
+  // --- FIX: Controllo esatto delle stringhe tramite operatore di uguaglianza == ---
+  if (n_field == "lights") { 
     bool state = doc_rec["e"][0]["v"].as<bool>(); 
-    digitalWrite(LED_PIN, state ? HIGH : LOW); // Attuazione cieca
+    digitalWrite(LED_PIN, state ? HIGH : LOW); 
+    Serial.print("Luce Rossa / Heater settato a: "); Serial.println(state);
   }
-  else if (n_field.endsWith("green_lights")) { 
+  else if (n_field == "green_lights") { 
     bool state = doc_rec["e"][0]["v"].as<bool>(); 
-    digitalWrite(GLED_PIN, state ? HIGH : LOW); // Attuazione cieca del LED verde da comando Python
+    digitalWrite(GLED_PIN, state ? HIGH : LOW); 
+    Serial.print("Luce Verde settata a: "); Serial.println(state);
   }
-  else if (n_field.endsWith("fan")) {
-    int ac_speed_percent = doc_rec["e"][0]["v"].as<int>();
+  else if (n_field == "fan") {
+    // --- FIX: Cast sicuro per superare l'incongruenza dei tipi numerici SenML ---
+    float raw_v = doc_rec["e"][0]["v"].as<float>(); 
+    int ac_speed_percent = (int)raw_v;
     int pwm_val = map(ac_speed_percent, 0, 100, 0, 255);
-    analogWrite(FAN_PIN, pwm_val); // Attuazione cieca ventola
+    
+    Serial.print("--- VENTOLA --- Valore %: ");
+    Serial.print(ac_speed_percent);
+    Serial.print(" -> PWM: ");
+    Serial.println(pwm_val);
+
+    analogWrite(FAN_PIN, pwm_val);
   }
-  else if (n_field.endsWith("lcd")) {
+  else if (n_field == "lcd") {
     String text = doc_rec["e"][0]["v"].as<String>();
-    lcd.clear(); lcd.setCursor(0, 0); lcd.print(text); // Stampa cieca testo da Python
+    lcd.clear(); lcd.setCursor(0, 0); lcd.print(text); 
   }
 }
 
 void reconnect() {
   while (!mqtt_client.connected()) {
+    Serial.print("Tentativo connessione MQTT... ");
     String client_id = "ArduinoClient-" + String(random(0xffff), HEX);
     if (mqtt_client.connect(client_id.c_str())) {
+      Serial.println("Connesso!");
       String sub_topic = base_topic + "/actuators/commands";
       mqtt_client.subscribe(sub_topic.c_str());
+      
+      lcd.clear();
+      lcd.setCursor(0,0);
+      lcd.print("MQTT Connesso!");
     } else {
+      Serial.print("Fallito, rc=");
+      Serial.print(mqtt_client.state());
+      Serial.println(" Ritento tra 5 secondi...");
       delay(5000);
     }
   }

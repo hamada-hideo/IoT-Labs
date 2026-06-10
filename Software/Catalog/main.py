@@ -28,7 +28,7 @@ if __name__ == '__main__':
     
     # 2. Montiamo il catalogo su CherryPy
     cherrypy.tree.mount(catalog_instance, f'/{endpoint}', conf)
-    cherrypy.config.update({'server.socket_host': '127.0.0.1'})
+    cherrypy.config.update({'server.socket_host': '0.0.0.0'})
     cherrypy.config.update({'server.socket_port': port})
     
     # 4. Avviamo CherryPy
