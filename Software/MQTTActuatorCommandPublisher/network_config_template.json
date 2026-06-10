@@ -1,4 +1,0 @@
-{
-    "feedback_topic": "/tiot/group12/smart_home/{room}/{id}/state",
-    "command_topic": "/tiot/group12/smart_home/{room}/{id}/config"
-}

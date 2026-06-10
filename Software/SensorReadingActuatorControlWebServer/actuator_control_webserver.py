@@ -24,20 +24,19 @@ class ActuatorControlWebServer:
         self._load_data()
         self.lock = threading.Lock()
 
-        self.devices_list = self._build_devices_list()
-
         self.ip = ip
         self.port = port
         self.endpoint = endpoint
         self.id = "ActuatorControlWebServer"
         self.logger_id = "LoggerWebServer"
 
+        self.devices_list = self._build_devices_list()
+
         self.data = {
             "id": self.id,
             "description": "Service that forwards commands to smart home actuators",
             "rest": {
-                "url": f"http://{self.ip}:{self.port}/{self.endpoint}",
-                "method": ["GET", "POST"]
+                "url": f"http://{self.ip}:{self.port}/{self.endpoint}"
             },
             "resources": self._build_resource_list()
         }
@@ -134,13 +133,20 @@ class ActuatorControlWebServer:
             for actuator in self.state[room]:
                 res.append({
                     "device": {
-                        "id": f"{room}-{actuator}",
+                        "id": f"{room}/{actuator}",
                         "description": f"{actuator} located in room {room}",
                         "resources": {
                             "type": self.state[room][actuator]["type"],
                             "unit": self.rules[self.state[room][actuator]["type"]]["unit"],
                             "min": self.rules[self.state[room][actuator]["type"]]["low"],
                             "max": self.rules[self.state[room][actuator]["type"]]["high"]
+                        },
+                        "mqtt": {
+                            "command_topic": f"/tiot/group12/smart_home/{room}/{actuator}/config",
+                            "feedback_topic": f"/tiot/group12/smart_home/{room}/{actuator}/state"
+                        },
+                        "rest": {
+                            "url": f"http://{self.ip}:{self.port}/{self.endpoint}/{room}/{actuator}"
                         }
                     },
                     "registered": False

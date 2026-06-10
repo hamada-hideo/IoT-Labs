@@ -24,15 +24,9 @@ DIR = os.path.dirname(os.path.abspath(__file__))
 
 class ActuatorCommandPublisher():
     def __init__(self):
-        self.config_file = os.path.join(DIR, "network_config.json")
-        with open(self.config_file, "r") as f:
-            data = json.load(f)
-        self.feedback_topic = data["feedback_topic"]
-        self.command_topic = data["command_topic"]
         self.actuators_config_file = os.path.join(DIR, "actuators_config.json")
         with open(self.actuators_config_file, "r") as f:
             data = json.load(f)
-        self.devices = data["devices"]
         self.rules = data["rules"]
         self.type_map = {
             "bool": lambda x : x.lower() == "true",
@@ -44,7 +38,7 @@ class ActuatorCommandPublisher():
 
         self.client_id = "MQTTActuatorCommandPublisher"
 
-        self.client = mqtt.Client(client_id=self.client_id)
+        self.client = mqtt.Client(client_id=f"tiot-group12-{self.client_id}")
 
         self.client.on_connect = self.on_connect
         self.client.on_message = self.on_message
@@ -52,11 +46,38 @@ class ActuatorCommandPublisher():
         self._get_broker_loop()
         self.client.connect(self.broker_host, self.broker_port)
 
+        self.subscribed_topics = set()
+        self.command_topics = {}
+        self.devices = {}
+
         self.payload = self._build_registration_payload()
         self.registered = False
         threading.Thread(target=self._try_register_refresh_loop, daemon=True).start()
 
         self.running = True
+
+    def _get_refresh_devices_topics(self):
+        while True:
+            devices = self.catalog.get_devices()
+            command_topics = {}
+            feedback_topics = set()
+            actuators = {}
+            for id in devices:
+                if "mqtt" in devices[id] and "command_topic" in devices[id]["mqtt"]:
+                    command_topics[id] = devices[id]["mqtt"]["command_topic"]
+                    actuators[id] = devices[id]
+                    if "feedback_topic" in devices[id]["mqtt"]:
+                        feedback_topics.add(devices[id]["mqtt"]["feedback_topic"])
+            diff = feedback_topics.difference(self.subscribed_topics)
+            if diff:
+                self.client.subscribe([(topic, 2) for topic in diff])
+            diff = self.subscribed_topics.difference(feedback_topics)
+            if diff:
+                self.client.unsubscribe([topic for topic in diff])
+            self.devices = actuators
+            self.command_topics = command_topics
+            self.subscribed_topics = feedback_topics
+            time.sleep(self.catalog.loop_time)
 
     def _try_register_refresh_loop(self):
         while True:
@@ -87,9 +108,7 @@ class ActuatorCommandPublisher():
         else:
             print(f"Connection failed with error code {rc}")
             return
-        self.client.subscribe([
-            (self.feedback_topic.format(room = room, id = id), 2) for room in self.devices for id in self.devices[room]
-        ])
+        threading.Thread(target=self._get_refresh_devices_topics, daemon=True).start()
 
     def on_message(self,client,userdata,msg):
         topic = msg.topic
@@ -104,22 +123,7 @@ class ActuatorCommandPublisher():
     def _build_registration_payload(self):
         return{
             "id" : self.client_id,
-            "description" : "MQTT Actuator Command Publisher",
-            "mqtt": {
-                "broker": {
-                    "ip": self.broker_host,
-                    "port": self.broker_port
-                },
-                "topics": {
-                    "commands": [
-                        self.command_topic.format(room = room, id = id) for room in self.devices for id in self.devices[room]
-                    ],
-                    "feedback":[
-                        self.feedback_topic.format(room = room, id = id) for room in self.devices for id in self.devices[room]
-                    ]
-                }
-            },
-            "resources": ["thermostat","lights","blinds","led"]
+            "description" : "MQTT Actuator Command Publisher"
         }
 
     def _send_command(self, topic, payload):
@@ -132,32 +136,31 @@ class ActuatorCommandPublisher():
         print(f"[{time.strftime('%X')}] Actuator Command Publisher started")
         while self.running:
             try:
-                print("\n--- MQTT PUBLISHER ---")
-                print(f"Select room {[room for room in self.devices]}:")
-                room = input("> ")
-                if room not in self.devices:
-                    print("Invalid choice")
-                    continue
+                if self.devices:
+                    print("\n--- MQTT PUBLISHER ---")
 
-                print(f"Select actuator {[actuator for actuator in self.devices[room]]}:")
-                actuator = input(">")
-                if actuator not in self.devices[room]:
-                    print("Invalid choice")
-                    continue
+                    print(f"Select actuator {[actuator for actuator in self.devices]}:")
+                    actuator = input(">")
+                    if actuator not in self.devices:
+                        print("Invalid choice")
+                        continue
 
-                actuator_type = self.devices[room][actuator]["type"]
+                    actuator_type = self.devices[actuator]["resources"]["type"]
 
-                print(f"Insert the value for actuator {actuator} in room {room}:")
-                value = input("> ")
-                self._send_command(
-                    self.command_topic.format(room = room, id = actuator),
-                    SenML.build_array_dict([SenML.build_event_dict(
-                        f"smart_home/{room}/{actuator}",
-                        self.rules[actuator_type]["unit"],
-                        self.type_map[self.rules[actuator_type]["value_type"]](value),
-                        time.time()
-                    )])
-                )
+                    print(f"Insert the value for actuator {actuator}:")
+                    value = input("> ")
+                    self._send_command(
+                        self.command_topics[actuator],
+                        SenML.build_array_dict([SenML.build_event_dict(
+                            f"smart_home/{actuator}",
+                            self.rules[actuator_type]["unit"],
+                            self.type_map[self.rules[actuator_type]["value_type"]](value),
+                            time.time()
+                        )])
+                    )
+                else:
+                    print("No actuators online")
+                    time.sleep(self.catalog.loop_time)
 
             except KeyboardInterrupt:
                 print("Shutting down...")
