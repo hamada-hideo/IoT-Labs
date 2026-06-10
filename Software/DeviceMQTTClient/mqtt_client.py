@@ -12,12 +12,6 @@ DIR = os.path.dirname(os.path.abspath(__file__))
 class DeviceMQTTClient():
     def __init__(self):
         self.config_file = os.path.join(DIR, "network_config.json")
-        with open(self.config_file, "r") as f:
-            data = json.load(f)
-        self.ip = data["ip"]
-        self.port = data["port"]
-        self.broker_ip = data["broker"]["ip"]
-        self.broker_port = data["broker"]["port"]
 
         self.client_id = "DeviceMQTTClient"
 

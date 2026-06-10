@@ -17,20 +17,20 @@ class SensorReadingWebServer(object):
         with open(os.path.join(DIR, "sensors_config.json"), "r") as f:
             self.resources = json.load(f)
         self.sensor_types = self._build_sensor_types()
-        self.devices_list = self._build_devices_list()
 
         self.ip = ip
         self.port = port
         self.endpoint = endpoint
         self.id = "SensorReadingWebServer"
         self.logger_id = "LoggerWebServer"
+
+        self.devices_list = self._build_devices_list()
         
         self.data = {
             "id": self.id,
             "description": "Service that exposes reads from the smart home sensors",
             "rest": {
-                "url": f"http://{self.ip}:{self.port}/{self.endpoint}",
-                "method": "GET"
+                "url": f"http://{self.ip}:{self.port}/{self.endpoint}"
             },
             "resources": self._build_resource_list()
         }
@@ -84,9 +84,12 @@ class SensorReadingWebServer(object):
             for sensor in self.resources[room]:
                 res.append({
                     "device": {
-                        "id": f"{room}-{sensor}",
+                        "id": f"{room}/{sensor}",
                         "description": f"{sensor} sensor located in room {room}",
-                        "resources": self.resources[room][sensor]
+                        "resources": self.resources[room][sensor],
+                        "rest": {
+                            "url": f"http://{self.ip}:{self.port}/{self.endpoint}/{room}/{sensor}"
+                        }
                     },
                     "registered": False
                 })

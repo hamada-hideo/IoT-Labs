@@ -19,8 +19,6 @@ class TemperaturePublisher():
         self.config_file = os.path.join(DIR, "network_config.json")
         with open(self.config_file, "r") as f:
             data = json.load(f)
-        self.ip = data["ip"]
-        self.port = data["port"]
 
         self.publish_interval = 30
         self.publish_topic = data["publish_topic"]
@@ -97,14 +95,13 @@ class TemperaturePublisher():
         "id": self.client_id,
         "description": "MQTT Temperature Sensor",
         "mqtt": {
-            "broker": {
-                "ip": self.broker_host,
-                "port": self.broker_port
-            },
-            "sub_topics": [self.command_topic],
-            "pub_topics": [self.publish_topic]
+            "sub_topic": self.command_topic,
+            "pub_topic": self.publish_topic
         },
-        "resources": ["temperature"]
+        "resources": {
+            "type": "temperature",
+            "unit": "Cel"
+        }
     }
 
     def _build_senml(self,temperature):

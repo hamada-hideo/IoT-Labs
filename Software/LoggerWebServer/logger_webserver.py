@@ -34,24 +34,27 @@ class LoggerWebServer():
         self.port = port
         self.endpoint = endpoint
         self.id = "LoggerWebServer"
+
+        self.cc = CatalogClient()
+
+        # Facciamo partire il ponte MQTT che ascolta la rete
+        self.mqtt_bridge = MQTTLoggerBridge(self)
+        threading.Thread(target=self.mqtt_bridge.run, daemon=True).start()
+
         self.data = {
             "id": self.id,
             "description": "Service that logs commands sent to actuators and data received from sensors in the smart home",
             "rest": {
-                "url": f"http://{self.ip}:{self.port}/{self.endpoint}",
-                "method": ["GET", "POST", "DELETE"]
+                "url": f"http://{self.ip}:{self.port}/{self.endpoint}"
+            },
+            "mqtt": {
+                "sub_topic": self.mqtt_bridge.topic
             }
         }
-
-        self.cc = CatalogClient()
 
         self.registered = False
 
         threading.Thread(target=self._try_register_refresh_loop, args = (self.data, self.id), daemon=True).start()
-        
-        # Facciamo partire il ponte MQTT che ascolta la rete
-        self.mqtt_bridge = MQTTLoggerBridge(self)
-        threading.Thread(target=self.mqtt_bridge.run, daemon=True).start()
 
     def _dump(self):
         with open(self.log_file, "w") as f:
