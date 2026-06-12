@@ -1,0 +1,11 @@
+{
+    "rolling_window_size": 10,
+    "temperature_threshold": 39.0,
+    "presence_timeout_seconds": 60,
+    "mqtt": {
+        "global_sub_topic": "/tiot/group12/#",
+        "arduino_command_topic": "/tiot/group12/actuators/commands",
+        "simulated_command_topic_template": "/tiot/group12/smart_home/{room}/{id}/config",
+        "alert_topic": "/tiot/group12/alerts"
+    }
+}

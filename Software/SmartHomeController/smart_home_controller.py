@@ -7,9 +7,8 @@ import sys
 from collections import deque
 
 # Aggiungo il path per importare correttamente il CatalogClient
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-if BASE_DIR not in sys.path:
-    sys.path.append(BASE_DIR)
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, BASE_DIR)
 
 from Catalog.catalog_client import CatalogClient
 
