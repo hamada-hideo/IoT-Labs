@@ -1,2 +1,3 @@
 #define SECRET_SSID "A54 di Mattia"
 #define SECRET_PASS "12211221"
+#define SECRET_NODE_ID "arduino"
