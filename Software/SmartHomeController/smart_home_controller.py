@@ -6,6 +6,7 @@ import os
 import sys
 from collections import deque
 
+# --- FIX PATH: Doppio salto indietro garantito ---
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PARENT_DIR = os.path.dirname(CURRENT_DIR)
 GRANDPARENT_DIR = os.path.dirname(PARENT_DIR)
@@ -28,6 +29,7 @@ class SmartHomeController:
         self.alert_topic = self.config["mqtt"]["alert_topic"]
         self.target_temp = self.config["target_temperature"]
         self.critical_temp = self.config["critical_temperature"]
+        
         self.client_id = f"Controller_Group12_{int(time.time())}"
 
         self.temp_windows = {}
@@ -43,7 +45,8 @@ class SmartHomeController:
             "endpoints": [self.sub_topic]
         }
         
-        self.client = mqtt.Client(client_id=self.client_id)
+        # FIX DEPRECATION WARNING: Aggiunto esplicitamente VERSION1
+        self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1, client_id=self.client_id)
         self.client.on_connect = self.on_connect
         self.client.on_message = self.on_message
         self.is_running = True
@@ -158,39 +161,60 @@ class SmartHomeController:
                                 current_real_state = self.room_shadow_state.get(room, {}).get(act_id, False)
                                 self.send_command(room, act_id, act_info, not current_real_state)
                     
-                    elif sensor_type in ["fan", "lights", "green_lights", "blinds", "lcd"]:
+                    # --- FIX HEATER INCLUSO NEL FEEDBACK HARDWARE ---
+                    elif sensor_type in ["fan", "heater", "lights", "green_lights", "blinds", "lcd"]:
                         if room not in self.room_shadow_state:
                             self.room_shadow_state[room] = {}
                         self.room_shadow_state[room][sensor_id] = val
 
+            # --- MOTORE DI VALUTAZIONE REGOLE INDUSTRIALE (ECO SET-POINTS) ---
             for room in rooms_to_process:
                 last_presence = self.presence_timers.get(room, 0)
                 is_occupied = (time.time() - last_presence) < self.config["presence_timeout_seconds"]
 
+                # 1. LOGICA LUCI: Le luci standard dipendono SOLO dalla presenza
+                self._dispatch_by_type(room, "lights", is_occupied)
+
+                # 2. LOGICA HVAC (CONDIZIONATORE E RISCALDAMENTO)
                 if room in self.temp_windows and len(self.temp_windows[room]) > 0:
                     t_mean = sum(self.temp_windows[room]) / len(self.temp_windows[room])
                     
-                    if t_mean > self.critical_temp:
-                        alert = {"room": room, "alert": "TEMP_CRITICAL", "mean": round(t_mean, 2)}
-                        self.client.publish(self.alert_topic, json.dumps(alert))
-                        self._dispatch_by_type(room, "fan", 100)
-                        self._dispatch_by_type(room, "lights", False)
-                        self._dispatch_by_type(room, "lcd", f"T:{t_mean:.1f}C ALERT!")
+                    if is_occupied:
+                        # --- MODALITÀ COMFORT (Stanza Occupata) ---
+                        if t_mean > self.target_temp:
+                            self._dispatch_by_type(room, "fan", 75)       # Accende Condizionatore
+                            self._dispatch_by_type(room, "heater", False) # Spegne Termosifone
+                            self._dispatch_by_type(room, "lcd", f"T:{t_mean:.1f}C AC:75%")
+                        elif t_mean < self.target_temp - 2.0:             # Soglia per il freddo
+                            self._dispatch_by_type(room, "fan", 0)        # Spegne Condizionatore
+                            self._dispatch_by_type(room, "heater", True)  # Accende Termosifone
+                            self._dispatch_by_type(room, "lcd", f"T:{t_mean:.1f}C HEAT:ON")
+                        else:
+                            self._dispatch_by_type(room, "fan", 0)
+                            self._dispatch_by_type(room, "heater", False)
+                            self._dispatch_by_type(room, "lcd", f"T:{t_mean:.1f}C OK")
                     
-                    elif t_mean > self.target_temp:
-                        self._dispatch_by_type(room, "fan", 75)
-                        self._dispatch_by_type(room, "lights", False)
-                        self._dispatch_by_type(room, "lcd", f"T:{t_mean:.1f}C AC:75%")
-                            
-                    elif is_occupied:
-                        self._dispatch_by_type(room, "fan", 0)
-                        self._dispatch_by_type(room, "lights", True)
-                        self._dispatch_by_type(room, "lcd", f"T:{t_mean:.1f}C AC:0%")
-                            
                     else:
-                        self._dispatch_by_type(room, "fan", 0)
-                        self._dispatch_by_type(room, "lights", False)
-                        self._dispatch_by_type(room, "lcd", f"T:{t_mean:.1f}C Vuota")
+                        # --- MODALITÀ ECO (Stanza Vuota) ---
+                        if t_mean > self.critical_temp:
+                            # Previene surriscaldamenti severi (Emergenza server/hardware)
+                            alert = {"room": room, "alert": "TEMP_CRITICAL", "mean": round(t_mean, 2)}
+                            self.client.publish(self.alert_topic, json.dumps(alert))
+                            self._dispatch_by_type(room, "fan", 100)
+                            self._dispatch_by_type(room, "heater", False)
+                            self._dispatch_by_type(room, "lcd", f"T:{t_mean:.1f}C ECO:COOL")
+                            
+                        elif t_mean < 15.0:
+                            # Previene il congelamento dei tubi (Antigelo)
+                            self._dispatch_by_type(room, "fan", 0)
+                            self._dispatch_by_type(room, "heater", True)
+                            self._dispatch_by_type(room, "lcd", f"T:{t_mean:.1f}C ECO:HEAT")
+                            
+                        else:
+                            # Temperatura accettabile in risparmio energetico
+                            self._dispatch_by_type(room, "fan", 0)
+                            self._dispatch_by_type(room, "heater", False)
+                            self._dispatch_by_type(room, "lcd", f"T:{t_mean:.1f}C ECO:IDLE")
 
         except Exception as e:
             print(f"[ERRORE CONTROLLER] {e}")

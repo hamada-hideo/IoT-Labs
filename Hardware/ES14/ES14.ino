@@ -10,13 +10,13 @@
 char ssid[] = SECRET_SSID; 
 char pass[] = SECRET_PASS; 
 
-const char* catalog_address = "10.65.201.158"; 
+// --- IP ESTRATTO DAI SECRETS PER FACILITARE IL DEPLOYMENT ---
+const char* catalog_address = SECRET_CATALOG_IP; 
 int catalog_port = 8080; 
 
 String broker_address = "";
 int broker_port = 1883;
 
-// --- SCALABILITÀ PURA: Identità letta dinamicamente dai segreti ---
 const String NODE_ID = SECRET_NODE_ID; 
 const String BASE_TOPIC = "/tiot/group12/smart_home/" + NODE_ID + "/"; 
 const String REGISTRATION_URL = "/catalog/devices";
@@ -49,8 +49,8 @@ int clapDuration = 200;
 
 bool isRunning = true; 
 
-// Variabili di stato reale per sincronizzazione speculare verso il Python
-bool current_red_light = false;
+// Variabili di stato reale
+bool current_red_light = false; 
 bool current_green_light = false;
 int current_fan_percent = 0;
 
@@ -98,9 +98,8 @@ void setup() {
     broker_address = "broker.emqx.io";
   }
 
-  // REGISTRAZIONE GRANULARE DISPOSITIVI SUL CATALOGO (Slegata da nomi rigidi)
   const char* actuators[][3] = {
-    {"lights", "lights", "bool"},
+    {"heater", "heater", "bool"},
     {"green_lights", "green_lights", "bool"},
     {"fan", "fan", "percent"},
     {"lcd", "lcd", "string"}
@@ -183,16 +182,14 @@ void loop() {
     doc_snd["bn"] = BASE_TOPIC; 
     JsonArray events = doc_snd.createNestedArray("e");
 
-    // Telemetria sensori standard
     JsonObject ev_temp = events.createNestedObject();
     ev_temp["n"] = "temperature"; ev_temp["v"] = (float)raw_temp; ev_temp["u"] = "Cel"; ev_temp["t"] = millis() / 1000.0;
 
     JsonObject ev_motion = events.createNestedObject();
     ev_motion["n"] = "motion"; ev_motion["v"] = (bool)digitalRead(PIR_PIN); ev_motion["u"] = "bool"; ev_motion["t"] = millis() / 1000.0;
 
-    // CONFERMA PERIODICA STATO ATTUATORI (Aggiorna la memoria shadow di Python)
-    JsonObject ev_lights = events.createNestedObject();
-    ev_lights["n"] = "lights"; ev_lights["v"] = current_red_light; ev_lights["u"] = "bool"; ev_lights["t"] = millis() / 1000.0;
+    JsonObject ev_heater = events.createNestedObject();
+    ev_heater["n"] = "heater"; ev_heater["v"] = current_red_light; ev_heater["u"] = "bool"; ev_heater["t"] = millis() / 1000.0;
 
     JsonObject ev_glights = events.createNestedObject();
     ev_glights["n"] = "green_lights"; ev_glights["v"] = current_green_light; ev_glights["u"] = "bool"; ev_glights["t"] = millis() / 1000.0;
@@ -217,16 +214,15 @@ void callback(char* topic, byte* payload, unsigned int length) {
   DeserializationError err = deserializeJson(doc_rec, (char*) payload); 
   if (err) return; 
 
-  // Parsing testuale dinamico dell'URI del topic
   String topicStr = String(topic);
   topicStr.replace(BASE_TOPIC, ""); 
   topicStr.replace("/config", ""); 
   String target_actuator = topicStr;
 
-  if (target_actuator == "lights") { 
+  if (target_actuator == "heater") { 
     current_red_light = doc_rec["e"][0]["v"].as<bool>(); 
     digitalWrite(LED_PIN, current_red_light ? HIGH : LOW); 
-    Serial.println("Stato attuatore rosso aggiornato: " + String(current_red_light));
+    Serial.println("Stato Heater aggiornato: " + String(current_red_light));
   }
   else if (target_actuator == "green_lights") { 
     current_green_light = doc_rec["e"][0]["v"].as<bool>(); 
