@@ -6,7 +6,6 @@ import os
 import sys
 from collections import deque
 
-# --- FIX PATH: Doppio salto indietro garantito ---
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PARENT_DIR = os.path.dirname(CURRENT_DIR)
 GRANDPARENT_DIR = os.path.dirname(PARENT_DIR)
@@ -26,26 +25,28 @@ class SmartHomeController:
             self.config = json.load(f)
             
         self.sub_topic = self.config["mqtt"]["global_sub_topic"]
-        self.alert_topic = self.config["mqtt"]["alert_topic"]
-        self.target_temp = self.config["target_temperature"]
-        self.critical_temp = self.config["critical_temperature"]
-        
         self.client_id = f"Controller_Group12_{int(time.time())}"
 
+        self.home_topology = {} 
         self.temp_windows = {}
-        self.presence_timers = {}
-        self.room_shadow_state = {}
-        self.home_topology = {}
+        self.presence_timers = {} 
+
+        self.LLT1, self.HLT1 = 15, 20
+        self.LLT2, self.HLT2 = 17, 22
+        self.LFT1, self.HFT1 = 20, 30
+        self.LFT2, self.HFT2 = 22, 32
+
+        self.lcd_data = {}
+        self.lcd_screen_index = 0
 
         self.cc = CatalogClient()
         self.registered = False
         self.service_payload = {
             "id": "smart_home_controller",
-            "description": "Rule Engine Scalabile Agnostico e Stateless",
+            "description": "Rule Engine: Pure Edge Toggle & Proportional HVAC",
             "endpoints": [self.sub_topic]
         }
         
-        # FIX DEPRECATION WARNING: Aggiunto esplicitamente VERSION1
         self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1, client_id=self.client_id)
         self.client.on_connect = self.on_connect
         self.client.on_message = self.on_message
@@ -55,8 +56,7 @@ class SmartHomeController:
         while self.is_running:
             broker = self.cc.get_broker()
             if broker:
-                self.broker_host = broker["ip"]
-                self.broker_port = broker["port"]
+                self.broker_host, self.broker_port = broker["ip"], broker["port"]
                 break
             time.sleep(self.cc.loop_time)
 
@@ -65,56 +65,70 @@ class SmartHomeController:
             try:
                 devices = self.cc.get_devices()
                 if devices and "error" not in devices:
-                    new_topology = {}
-                    for dev_id, dev_info in devices.items():
-                        parts = dev_id.split("/")
+                    device_list = devices if isinstance(devices, list) else devices.values() if isinstance(devices, dict) else []
+                    for dev_info in device_list:
+                        if not isinstance(dev_info, dict): continue
+                        parts = dev_info.get("id", "").split("/")
                         if len(parts) >= 2:
-                            room = parts[0]
-                            dev_name = parts[1]
+                            room, dev_name = parts[0], parts[1]
                             
-                            if room not in new_topology:
-                                new_topology[room] = {"sensors": {}, "actuators": {}}
+                            # FIX AMNESIA: Aggiungiamo i dispositivi, ma NON li rimuoviamo mai se il catalogo singhiozza
+                            if room not in self.home_topology: 
+                                self.home_topology[room] = {"sensors": {}, "actuators": {}}
                             
                             res_type = dev_info.get("resources", {}).get("type", dev_name)
-                            
                             if "mqtt" in dev_info and "command_topic" in dev_info["mqtt"]:
-                                new_topology[room]["actuators"][dev_name] = {
-                                    "type": res_type,
-                                    "unit": dev_info.get("resources", {}).get("unit", ""),
-                                    "command_topic": dev_info["mqtt"]["command_topic"]
-                                }
+                                self.home_topology[room]["actuators"][dev_name] = {"type": res_type, "unit": dev_info.get("resources", {}).get("unit", ""), "command_topic": dev_info["mqtt"]["command_topic"]}
                             else:
-                                new_topology[room]["sensors"][dev_name] = {"type": res_type}
-                    self.home_topology = new_topology
-            except Exception:
-                pass
-            time.sleep(self.cc.loop_time)
+                                self.home_topology[room]["sensors"][dev_name] = {"type": res_type}
+                                
+                    if self.home_topology and not hasattr(self, '_topology_printed'):
+                        print(f"\n[CATALOGO] Mappa caricata (Amnesia Protetta): {list(self.home_topology.keys())}\n")
+                        self._topology_printed = True
+            except: pass
+            time.sleep(getattr(self.cc, 'loop_time', 5))
+
+    def _lcd_rotation_loop(self):
+        while self.is_running:
+            try:
+                time.sleep(5)
+                if not self.home_topology or not self.lcd_data: continue
+                    
+                for room, data in list(self.lcd_data.items()):
+                    idx = self.lcd_screen_index
+                    if idx == 0:
+                        text = f"Temperature:|{int(data['temp'])}"
+                    elif idx == 1:
+                        text = f"Fan %:{int(data['fan'])}|Heater %:{int(data['heater'])}"
+                    elif idx == 2:
+                        text = f"Presence: {data['presence']}|"
+                    elif idx == 3:
+                        text = f" LEDS     FAN   |{data['llt']} {data['hlt']}    {data['lft']} {data['hft']}"
+                    self._dispatch_by_type(room, "lcd", text)
+                self.lcd_screen_index = (self.lcd_screen_index + 1) % 4
+            except Exception as e:
+                print(f"[ERRORE LCD THREAD] {e}")
 
     def register_and_keep_alive(self):
         while self.is_running:
             try:
                 if not self.registered:
-                    if self.cc.register_service(self.service_payload):
-                        self.registered = True
+                    if self.cc.register_service(self.service_payload): self.registered = True
                 else:
-                    if not self.cc.refresh_service(self.service_payload["id"]):
-                        self.registered = False
-            except Exception:
-                pass
+                    if not self.cc.refresh_service(self.service_payload["id"]): self.registered = False
+            except: pass
             time.sleep(self.cc.loop_time)
 
     def on_connect(self, client, userdata, flags, rc):
         if rc == 0:
-            print(f"[MQTT] Connesso al broker. Iscritto a: {self.sub_topic}")
+            print(f"[MQTT] Iscritto al topic: {self.sub_topic}")
             self.client.subscribe(self.sub_topic)
 
-    def send_command(self, room, actuator_id, actuator_info, value):
+    def send_command(self, room, actuator_id, actuator_info, value, override_id=None):
         base_name = f"smart_home/{room}/"
-        event = SenML.build_event_dict(actuator_id, actuator_info["unit"], value, time.time())
-        payload = SenML.build_array_dict([event], basename=base_name)
-        topic = actuator_info["command_topic"]
-        self.client.publish(topic, json.dumps(payload))
-        print(f"> [COMANDO EMESSO] {room}/{actuator_id} ({actuator_info['type']}) -> {value}")
+        final_id = override_id if override_id else actuator_id
+        payload = SenML.build_array_dict([SenML.build_event_dict(final_id, actuator_info["unit"], value, time.time())], basename=base_name)
+        self.client.publish(actuator_info["command_topic"], json.dumps(payload))
 
     def _dispatch_by_type(self, room, target_type, value):
         room_actuators = self.home_topology.get(room, {}).get("actuators", {})
@@ -125,97 +139,77 @@ class SmartHomeController:
     def on_message(self, client, userdata, msg):
         try:
             payload = json.loads(msg.payload.decode("utf-8"))
-            if not SenML.validate_SenML(payload):
-                return
             
+            if not SenML.validate_SenML(payload):
+                print("[AVVISO] Validazione SenML bypassata per tolleranza errori.")
+                
             flat_events = SenML.flatten_senml(payload)
             rooms_to_process = set()
 
             for event in flat_events:
-                name_parts = event["n"].split("/")
-                if len(name_parts) >= 3 and name_parts[0] == "smart_home":
-                    room = name_parts[1]
-                    sensor_id = name_parts[2]
-                    val = event["v"]
-                    
-                    sensor_info = self.home_topology.get(room, {}).get("sensors", {}).get(sensor_id, {})
-                    if not sensor_info:
-                        sensor_info = self.home_topology.get(room, {}).get("actuators", {}).get(sensor_id, {})
-                    sensor_type = sensor_info.get("type", sensor_id)
-
-                    if sensor_type == "temperature":
-                        rooms_to_process.add(room)
-                        if room not in self.temp_windows:
-                            self.temp_windows[room] = deque(maxlen=self.config["rolling_window_size"])
-                        self.temp_windows[room].append(val)
-                    
-                    elif sensor_type == "motion" and val is True:
-                        rooms_to_process.add(room)
-                        self.presence_timers[room] = time.time()
+                # print(f"[RETE] Ricevuto: {event['n']} -> {event['v']}")
+                
+                name_parts = [p for p in event["n"].split("/") if p]
+                if "smart_home" in name_parts:
+                    idx = name_parts.index("smart_home")
+                    if len(name_parts) >= idx + 3:
+                        room, sensor_id = name_parts[idx + 1], name_parts[idx + 2]
+                        val = event["v"]
                         
-                    elif sensor_type == "noise_event" and val is True:
-                        self.presence_timers[room] = time.time()
-                        room_acts = self.home_topology.get(room, {}).get("actuators", {})
-                        for act_id, act_info in room_acts.items():
-                            if act_info["type"] == "green_lights":
-                                current_real_state = self.room_shadow_state.get(room, {}).get(act_id, False)
-                                self.send_command(room, act_id, act_info, not current_real_state)
-                    
-                    # --- FIX HEATER INCLUSO NEL FEEDBACK HARDWARE ---
-                    elif sensor_type in ["fan", "heater", "lights", "green_lights", "blinds", "lcd"]:
-                        if room not in self.room_shadow_state:
-                            self.room_shadow_state[room] = {}
-                        self.room_shadow_state[room][sensor_id] = val
+                        sensor_type = self.home_topology.get(room, {}).get("sensors", {}).get(sensor_id, {}).get("type", sensor_id)
+                        is_active = str(val).lower() in ["true", "1", "on"]
 
-            # --- MOTORE DI VALUTAZIONE REGOLE INDUSTRIALE (ECO SET-POINTS) ---
+                        if sensor_type == "temperature":
+                            rooms_to_process.add(room)
+                            if room not in self.temp_windows: self.temp_windows[room] = deque(maxlen=self.config["rolling_window_size"])
+                            self.temp_windows[room].append(float(val))
+                        
+                        elif sensor_type == "motion" and is_active:
+                            rooms_to_process.add(room)
+                            self.presence_timers[room] = time.time()
+                            
+                        elif sensor_type == "noise_event" and is_active:
+                            rooms_to_process.add(room)
+                            self.presence_timers[room] = time.time() 
+                            
+                            room_acts = self.home_topology.get(room, {}).get("actuators", {})
+                            for act_id, act_info in room_acts.items():
+                                if act_info["type"] == "green_lights":
+                                    self.send_command(room, act_id, act_info, True, override_id=f"{act_id}_toggle")
+                                    print(f"> [TOGGLE EMESSO] {room} green_lights")
+
             for room in rooms_to_process:
-                last_presence = self.presence_timers.get(room, 0)
-                is_occupied = (time.time() - last_presence) < self.config["presence_timeout_seconds"]
+                presence = (time.time() - self.presence_timers.get(room, 0)) < 1800 
 
-                # 1. LOGICA LUCI: Le luci standard dipendono SOLO dalla presenza
-                self._dispatch_by_type(room, "lights", is_occupied)
+                if presence:
+                    lowLedTemp, highLedTemp = self.LLT1, self.HLT1
+                    lowFanTemp, highFanTemp = self.LFT1, self.HFT1
+                    presence_string = "Y"
+                else:
+                    lowLedTemp, highLedTemp = self.LLT2, self.HLT2
+                    lowFanTemp, highFanTemp = self.LFT2, self.HFT2
+                    presence_string = "N"
 
-                # 2. LOGICA HVAC (CONDIZIONATORE E RISCALDAMENTO)
                 if room in self.temp_windows and len(self.temp_windows[room]) > 0:
-                    t_mean = sum(self.temp_windows[room]) / len(self.temp_windows[room])
-                    
-                    if is_occupied:
-                        # --- MODALITÀ COMFORT (Stanza Occupata) ---
-                        if t_mean > self.target_temp:
-                            self._dispatch_by_type(room, "fan", 75)       # Accende Condizionatore
-                            self._dispatch_by_type(room, "heater", False) # Spegne Termosifone
-                            self._dispatch_by_type(room, "lcd", f"T:{t_mean:.1f}C AC:75%")
-                        elif t_mean < self.target_temp - 2.0:             # Soglia per il freddo
-                            self._dispatch_by_type(room, "fan", 0)        # Spegne Condizionatore
-                            self._dispatch_by_type(room, "heater", True)  # Accende Termosifone
-                            self._dispatch_by_type(room, "lcd", f"T:{t_mean:.1f}C HEAT:ON")
-                        else:
-                            self._dispatch_by_type(room, "fan", 0)
-                            self._dispatch_by_type(room, "heater", False)
-                            self._dispatch_by_type(room, "lcd", f"T:{t_mean:.1f}C OK")
-                    
-                    else:
-                        # --- MODALITÀ ECO (Stanza Vuota) ---
-                        if t_mean > self.critical_temp:
-                            # Previene surriscaldamenti severi (Emergenza server/hardware)
-                            alert = {"room": room, "alert": "TEMP_CRITICAL", "mean": round(t_mean, 2)}
-                            self.client.publish(self.alert_topic, json.dumps(alert))
-                            self._dispatch_by_type(room, "fan", 100)
-                            self._dispatch_by_type(room, "heater", False)
-                            self._dispatch_by_type(room, "lcd", f"T:{t_mean:.1f}C ECO:COOL")
-                            
-                        elif t_mean < 15.0:
-                            # Previene il congelamento dei tubi (Antigelo)
-                            self._dispatch_by_type(room, "fan", 0)
-                            self._dispatch_by_type(room, "heater", True)
-                            self._dispatch_by_type(room, "lcd", f"T:{t_mean:.1f}C ECO:HEAT")
-                            
-                        else:
-                            # Temperatura accettabile in risparmio energetico
-                            self._dispatch_by_type(room, "fan", 0)
-                            self._dispatch_by_type(room, "heater", False)
-                            self._dispatch_by_type(room, "lcd", f"T:{t_mean:.1f}C ECO:IDLE")
+                    temperature = sum(self.temp_windows[room]) / len(self.temp_windows[room])
+                else:
+                    temperature = 25.0
 
+                if temperature >= highFanTemp: fanPercent = 100
+                elif temperature <= lowFanTemp: fanPercent = 0
+                else: fanPercent = int(((temperature - lowFanTemp) / (highFanTemp - lowFanTemp)) * 100)
+
+                if temperature >= highLedTemp: heaterPercent = 0
+                elif temperature <= lowLedTemp: heaterPercent = 100
+                else: heaterPercent = int(100 - (((temperature - lowLedTemp) / (highLedTemp - lowLedTemp)) * 100))
+
+                self._dispatch_by_type(room, "fan", fanPercent)
+                self._dispatch_by_type(room, "heater", heaterPercent)
+
+                self.lcd_data[room] = {
+                    "temp": temperature, "fan": fanPercent, "heater": heaterPercent, "presence": presence_string,
+                    "llt": lowLedTemp, "hlt": highLedTemp, "lft": lowFanTemp, "hft": highFanTemp
+                }
         except Exception as e:
             print(f"[ERRORE CONTROLLER] {e}")
 
@@ -223,13 +217,11 @@ class SmartHomeController:
         self._get_broker_loop()
         threading.Thread(target=self.register_and_keep_alive, daemon=True).start()
         threading.Thread(target=self._sync_topology, daemon=True).start()
-        
+        threading.Thread(target=self._lcd_rotation_loop, daemon=True).start()
         self.client.connect(self.broker_host, self.broker_port, 60)
         self.client.loop_start()
-        
         try:
-            while True:
-                time.sleep(1)
+            while True: time.sleep(1)
         except KeyboardInterrupt:
             self.is_running = False
             self.client.disconnect()
