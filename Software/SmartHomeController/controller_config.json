@@ -1,10 +1,24 @@
 {
-    "rolling_window_size": 10,
-    "target_temperature": 26.0,
-    "critical_temperature": 39.0,
-    "presence_timeout_seconds": 60,
     "mqtt": {
         "global_sub_topic": "/tiot/group12/#",
         "alert_topic": "/tiot/group12/alerts"
+    },
+    "presence_timeout_seconds": 1800,
+    "rolling_window_size": 5,
+    "target_temperature": 22.0,
+    "critical_temperature": 35.0,
+    "thresholds": {
+        "presence": { 
+            "LLT": 15, 
+            "HLT": 20, 
+            "LFT": 20, 
+            "HFT": 30 
+        },
+        "eco": { 
+            "LLT": 17, 
+            "HLT": 22, 
+            "LFT": 22, 
+            "HFT": 32 
+        }
     }
 }

@@ -10,10 +10,8 @@ CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PARENT_DIR = os.path.dirname(CURRENT_DIR)
 GRANDPARENT_DIR = os.path.dirname(PARENT_DIR)
 
-if PARENT_DIR not in sys.path:
-    sys.path.insert(0, PARENT_DIR)
-if GRANDPARENT_DIR not in sys.path:
-    sys.path.insert(0, GRANDPARENT_DIR)
+if PARENT_DIR not in sys.path: sys.path.insert(0, PARENT_DIR)
+if GRANDPARENT_DIR not in sys.path: sys.path.insert(0, GRANDPARENT_DIR)
 
 from Catalog.catalog_client import CatalogClient
 import SenMLUtils as SenML
@@ -31,10 +29,15 @@ class SmartHomeController:
         self.temp_windows = {}
         self.presence_timers = {} 
 
-        self.LLT1, self.HLT1 = 15, 20
-        self.LLT2, self.HLT2 = 17, 22
-        self.LFT1, self.HFT1 = 20, 30
-        self.LFT2, self.HFT2 = 22, 32
+        self.presence_timeout = self.config.get("presence_timeout_seconds", 1800)
+        self.target_temp = self.config.get("target_temperature", 22.0)
+        
+        thres = self.config.get("thresholds", {})
+        p_t = thres.get("presence", {"LLT": 15, "HLT": 20, "LFT": 20, "HFT": 30})
+        e_t = thres.get("eco", {"LLT": 17, "HLT": 22, "LFT": 22, "HFT": 32})
+        
+        self.LLT1, self.HLT1, self.LFT1, self.HFT1 = p_t["LLT"], p_t["HLT"], p_t["LFT"], p_t["HFT"]
+        self.LLT2, self.HLT2, self.LFT2, self.HFT2 = e_t["LLT"], e_t["HLT"], e_t["LFT"], e_t["HFT"]
 
         self.lcd_data = {}
         self.lcd_screen_index = 0
@@ -43,7 +46,7 @@ class SmartHomeController:
         self.registered = False
         self.service_payload = {
             "id": "smart_home_controller",
-            "description": "Rule Engine: Pure Edge Toggle & Proportional HVAC",
+            "description": "Rule Engine",
             "endpoints": [self.sub_topic]
         }
         
@@ -66,13 +69,13 @@ class SmartHomeController:
                 devices = self.cc.get_devices()
                 if devices and "error" not in devices:
                     device_list = devices if isinstance(devices, list) else devices.values() if isinstance(devices, dict) else []
+                    
                     for dev_info in device_list:
                         if not isinstance(dev_info, dict): continue
                         parts = dev_info.get("id", "").split("/")
                         if len(parts) >= 2:
                             room, dev_name = parts[0], parts[1]
                             
-                            # FIX AMNESIA: Aggiungiamo i dispositivi, ma NON li rimuoviamo mai se il catalogo singhiozza
                             if room not in self.home_topology: 
                                 self.home_topology[room] = {"sensors": {}, "actuators": {}}
                             
@@ -83,7 +86,7 @@ class SmartHomeController:
                                 self.home_topology[room]["sensors"][dev_name] = {"type": res_type}
                                 
                     if self.home_topology and not hasattr(self, '_topology_printed'):
-                        print(f"\n[CATALOGO] Mappa caricata (Amnesia Protetta): {list(self.home_topology.keys())}\n")
+                        print(f"\n[CATALOGO] Mappa caricata: {list(self.home_topology.keys())}\n")
                         self._topology_printed = True
             except: pass
             time.sleep(getattr(self.cc, 'loop_time', 5))
@@ -95,6 +98,7 @@ class SmartHomeController:
                 if not self.home_topology or not self.lcd_data: continue
                     
                 for room, data in list(self.lcd_data.items()):
+                    # IL FIX: Non controlliamo più is_online. Se abbiamo i dati, aggiorniamo l'LCD!
                     idx = self.lcd_screen_index
                     if idx == 0:
                         text = f"Temperature:|{int(data['temp'])}"
@@ -106,8 +110,7 @@ class SmartHomeController:
                         text = f" LEDS     FAN   |{data['llt']} {data['hlt']}    {data['lft']} {data['hft']}"
                     self._dispatch_by_type(room, "lcd", text)
                 self.lcd_screen_index = (self.lcd_screen_index + 1) % 4
-            except Exception as e:
-                print(f"[ERRORE LCD THREAD] {e}")
+            except: pass
 
     def register_and_keep_alive(self):
         while self.is_running:
@@ -139,16 +142,12 @@ class SmartHomeController:
     def on_message(self, client, userdata, msg):
         try:
             payload = json.loads(msg.payload.decode("utf-8"))
-            
-            if not SenML.validate_SenML(payload):
-                print("[AVVISO] Validazione SenML bypassata per tolleranza errori.")
+            if not SenML.validate_SenML(payload): pass
                 
             flat_events = SenML.flatten_senml(payload)
             rooms_to_process = set()
 
             for event in flat_events:
-                # print(f"[RETE] Ricevuto: {event['n']} -> {event['v']}")
-                
                 name_parts = [p for p in event["n"].split("/") if p]
                 if "smart_home" in name_parts:
                     idx = name_parts.index("smart_home")
@@ -161,12 +160,13 @@ class SmartHomeController:
 
                         if sensor_type == "temperature":
                             rooms_to_process.add(room)
-                            if room not in self.temp_windows: self.temp_windows[room] = deque(maxlen=self.config["rolling_window_size"])
+                            if room not in self.temp_windows: self.temp_windows[room] = deque(maxlen=self.config.get("rolling_window_size", 5))
                             self.temp_windows[room].append(float(val))
                         
-                        elif sensor_type == "motion" and is_active:
+                        elif sensor_type == "motion":
                             rooms_to_process.add(room)
-                            self.presence_timers[room] = time.time()
+                            if is_active:
+                                self.presence_timers[room] = time.time()
                             
                         elif sensor_type == "noise_event" and is_active:
                             rooms_to_process.add(room)
@@ -176,42 +176,73 @@ class SmartHomeController:
                             for act_id, act_info in room_acts.items():
                                 if act_info["type"] == "green_lights":
                                     self.send_command(room, act_id, act_info, True, override_id=f"{act_id}_toggle")
-                                    print(f"> [TOGGLE EMESSO] {room} green_lights")
 
+            # --- MOTORE DI VALUTAZIONE REGOLE ---
             for room in rooms_to_process:
-                presence = (time.time() - self.presence_timers.get(room, 0)) < 1800 
+                # IL FIX: Rimossa la condizione is_online. Se riceviamo telemetria, la elaboriamo sempre!
+                if room not in self.temp_windows or len(self.temp_windows[room]) == 0:
+                    continue
 
-                if presence:
-                    lowLedTemp, highLedTemp = self.LLT1, self.HLT1
-                    lowFanTemp, highFanTemp = self.LFT1, self.HFT1
-                    presence_string = "Y"
+                presence = (time.time() - self.presence_timers.get(room, 0)) < self.presence_timeout 
+                temperature = sum(self.temp_windows[room]) / len(self.temp_windows[room])
+
+                if "arduino" in room.lower():
+                    self.apply_arduino_logic(room, temperature, presence)
                 else:
-                    lowLedTemp, highLedTemp = self.LLT2, self.HLT2
-                    lowFanTemp, highFanTemp = self.LFT2, self.HFT2
-                    presence_string = "N"
+                    self.apply_virtual_logic(room, temperature, presence)
 
-                if room in self.temp_windows and len(self.temp_windows[room]) > 0:
-                    temperature = sum(self.temp_windows[room]) / len(self.temp_windows[room])
-                else:
-                    temperature = 25.0
-
-                if temperature >= highFanTemp: fanPercent = 100
-                elif temperature <= lowFanTemp: fanPercent = 0
-                else: fanPercent = int(((temperature - lowFanTemp) / (highFanTemp - lowFanTemp)) * 100)
-
-                if temperature >= highLedTemp: heaterPercent = 0
-                elif temperature <= lowLedTemp: heaterPercent = 100
-                else: heaterPercent = int(100 - (((temperature - lowLedTemp) / (highLedTemp - lowLedTemp)) * 100))
-
-                self._dispatch_by_type(room, "fan", fanPercent)
-                self._dispatch_by_type(room, "heater", heaterPercent)
-
-                self.lcd_data[room] = {
-                    "temp": temperature, "fan": fanPercent, "heater": heaterPercent, "presence": presence_string,
-                    "llt": lowLedTemp, "hlt": highLedTemp, "lft": lowFanTemp, "hft": highFanTemp
-                }
         except Exception as e:
             print(f"[ERRORE CONTROLLER] {e}")
+
+    def apply_arduino_logic(self, room, temperature, presence):
+        if presence:
+            lowLedTemp, highLedTemp = self.LLT1, self.HLT1
+            lowFanTemp, highFanTemp = self.LFT1, self.HFT1
+            presence_string = "Y"
+        else:
+            lowLedTemp, highLedTemp = self.LLT2, self.HLT2
+            lowFanTemp, highFanTemp = self.LFT2, self.HFT2
+            presence_string = "N"
+
+        if temperature >= highFanTemp: fanPercent = 100
+        elif temperature <= lowFanTemp: fanPercent = 0
+        else: fanPercent = int(((temperature - lowFanTemp) / (highFanTemp - lowFanTemp)) * 100)
+
+        if temperature >= highLedTemp: heaterPercent = 0
+        elif temperature <= lowLedTemp: heaterPercent = 100
+        else: heaterPercent = int(100 - (((temperature - lowLedTemp) / (highLedTemp - lowLedTemp)) * 100))
+
+        self._dispatch_by_type(room, "fan", fanPercent)
+        self._dispatch_by_type(room, "heater", heaterPercent)
+
+        self.lcd_data[room] = {
+            "temp": temperature, "fan": fanPercent, "heater": heaterPercent, "presence": presence_string,
+            "llt": lowLedTemp, "hlt": highLedTemp, "lft": lowFanTemp, "hft": highFanTemp
+        }
+
+    def apply_virtual_logic(self, room, temperature, presence):
+        self._dispatch_by_type(room, "lights", presence)
+
+        if presence:
+            if temperature > self.target_temp:
+                self._dispatch_by_type(room, "thermostat", "COOLING")
+                self._dispatch_by_type(room, "blinds", "CLOSE")
+            elif temperature < (self.target_temp - 2.0):
+                self._dispatch_by_type(room, "thermostat", "HEATING")
+                self._dispatch_by_type(room, "blinds", "OPEN")
+            else:
+                self._dispatch_by_type(room, "thermostat", "OFF")
+                self._dispatch_by_type(room, "blinds", "OPEN")
+        else:
+            if temperature > (self.target_temp + 5.0):
+                self._dispatch_by_type(room, "thermostat", "COOLING")
+                self._dispatch_by_type(room, "blinds", "CLOSE")
+            elif temperature < 15.0:
+                self._dispatch_by_type(room, "thermostat", "HEATING")
+                self._dispatch_by_type(room, "blinds", "OPEN")
+            else:
+                self._dispatch_by_type(room, "thermostat", "OFF")
+                self._dispatch_by_type(room, "blinds", "CLOSE")
 
     def start(self):
         self._get_broker_loop()
