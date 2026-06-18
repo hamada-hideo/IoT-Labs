@@ -48,7 +48,6 @@ int nClaps = 2;
 int clapInterval = 3000; 
 int clapDuration = 200; 
 
-bool isRunning = true; 
 bool current_green_light = false; 
 
 int retry_time = 1;
@@ -175,7 +174,6 @@ void loop() {
     for (int i = 0; i < currentSamples; i++) {
       int a = abs(localBuffer[i]); 
       if (a > current_noise_peak) current_noise_peak = a;
-      if (!isRunning) continue;
 
       if(a > clapThresh && (millis() - lastTime) > clapDuration) {
         
@@ -212,8 +210,6 @@ void loop() {
       }
     }
   }
-
-  if (!isRunning) return; 
 
   if (millis() - last_publish > 10000) { 
     int raw_temp = 25; 
