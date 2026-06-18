@@ -1,10 +1,21 @@
+#EXCERCISE 6 
+
+# --- Section 1: Library Imports and Environment Setup ---
+# Import essential libraries: 'requests' for REST API calls, 'json' for data handling,
+# and 'os' to manage file system paths for configuration files
+
 import requests
 import json
 import os
 
 DIR = os.path.dirname(os.path.abspath(__file__))
 
-class CatalogClient:
+# --- Section 2: Class Initialization and Configuration Loading ---
+# The constructor loads connection parameters (IP, Port, Endpoint) from 'network_config.json'.
+# It also calculates the 'loop_time' for registration refreshes, which must be 
+# frequent enough to prevent the Catalog from purging the entry (every 60s)
+
+class CatalogClient:  
     
     def __init__(self):
         self.config_file = os.path.join(DIR, "network_config.json")
@@ -19,6 +30,11 @@ class CatalogClient:
         self.catalog_broker_path = "broker"
         self.registered = False
 
+ # --- Section 3: Generic REST Request Handler ---
+    # This private method centralizes HTTP communication logic. It handles different
+    # HTTP methods (GET, POST, PUT), constructs URLs, and includes comprehensive 
+    # error handling for connection issues, invalid status codes, or malformed JSON 
+    
     def _request_json(self, method, full_path, message_spec, data):
         url = f"http://{self.catalog_ip}:{self.catalog_port}/{full_path}"
         try:
@@ -39,6 +55,10 @@ class CatalogClient:
         except Exception as e:
             print(f"Warning: Error during {method} request to {url} for {message_spec} functionality: {str(e)}")
 
+# --- Section 4: HTTP Verb Wrappers ---
+    # Simplified helper methods to call the generic request handler using 
+    # specific HTTP verbs required for Catalog operations 
+    
     def _get_request_json(self, full_path, message_spec):
         return self._request_json("GET", full_path, message_spec, None)
 
@@ -48,6 +68,10 @@ class CatalogClient:
     def _put_request_json(self, full_path, message_spec):
         return self._request_json("PUT", full_path, message_spec, None)
 
+# --- Section 5: Discovery Methods (GET) ---
+    # Methods used to retrieve information from the Catalog registry, such as the
+    # full catalog, device/service lists, or MQTT broker connection details
+    
     def get_catalog(self):
         return self._get_request_json(self.catalog_endpoint, "full catalog")
     
@@ -65,6 +89,11 @@ class CatalogClient:
     
     def get_broker(self):
         return self._get_request_json(f"{self.catalog_endpoint}/{self.catalog_broker_path}", "broker data")
+
+# --- Section 6: Registration and Lifecycle Management (POST/PUT) ---
+    # Methods to register new entities and refresh existing ones. 'refresh' calls 
+    # are critical to update the 'insert_timestamp', preventing the background 
+    # thread from deleting the registration after 120 seconds
     
     def register_device(self, payload):
         return self._post_request_json(f"{self.catalog_endpoint}/{self.catalog_devices_path}", "device registration", payload)
