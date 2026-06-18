@@ -1,3 +1,5 @@
+EXERCISE 7
+
 # --- Section 1: Library Imports and Path Configuration ---
 # Standard libraries for web services (cherrypy), data (json), and concurrency (threading).
 # The system path is updated to allow importing the MQTT bridge from the Catalog package.
