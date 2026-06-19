@@ -1,4 +1,0 @@
-{
-    "publish_topic": "/tiot/group12/temperature",
-    "command_topic": "/tiot/group12/temperature/config"
-}
