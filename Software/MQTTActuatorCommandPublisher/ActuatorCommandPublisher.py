@@ -32,7 +32,8 @@ class ActuatorCommandPublisher():
         self.type_map = {
             "bool": lambda x : x.lower() == "true",
             "int": int,
-            "float": float
+            "float": float,
+            "str": str
         }
         
         self.catalog = CatalogClient()

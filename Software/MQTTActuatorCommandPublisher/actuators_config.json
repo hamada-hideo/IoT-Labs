@@ -11,8 +11,20 @@
         "unit": "%",
         "value_type": "int"
     },
-    "led": {
+    "heater": {
+        "unit": "%",
+        "value_type": "int"
+    },
+    "fan": {
+        "unit": "%",
+        "value_type": "int"
+    },
+    "green_lights": {
         "unit": "bool",
         "value_type": "bool"
+    },
+    "lcd": {
+        "unit": "none",
+        "value_type": "str"
     }
 }

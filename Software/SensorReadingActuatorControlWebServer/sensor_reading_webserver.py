@@ -100,7 +100,6 @@ class SensorReadingWebServer(object):
                         "rest": {
                             "url": f"http://{self.ip}:{self.port}/{self.endpoint}/{room}/{sensor}"
                         }
-                        # TODO: Aggiungere topic per il logger in base alla parte di Borghi
                     },
                     "registered": False
                 })

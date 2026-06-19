@@ -5,7 +5,8 @@
     "actuators_endpoint": "actuators",
     "mqtt": {
         "sub_topic": "/tiot/group12/smart_home/{room}/{id}/config",
-        "pub_topic": "/tiot/group12/smart_home/{room}/{id}/state"
+        "pub_topic": "/tiot/group12/smart_home/{room}/{id}/state",
+        "telemetry_topic": "/tiot/group12/sensors/telemetry"
     },
     "expiration_time": 10
 }
