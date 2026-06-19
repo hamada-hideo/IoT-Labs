@@ -3,7 +3,7 @@
         "global_sub_topic": "/tiot/group12/sensors/telemetry",
         "alert_topic": "/tiot/group12/alerts"
     },
-    "presence_timeout_seconds": 10,
+    "presence_timeout_seconds": 1800,
     "rolling_window_size": 5,
     "target_temperature": 22.0,
     "critical_temperature": 35.0,
