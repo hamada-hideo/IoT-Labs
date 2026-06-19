@@ -25,7 +25,7 @@ if __name__ == '__main__':
             'tools.response_headers.headers': [('Content-Type', 'application/json')]
         }
     }
-    # Montiamo il webserver unificato
+ 
     cherrypy.tree.mount(SensorReadingWebServer(ip, port, sensors_endpoint), f'/{sensors_endpoint}', conf)
     cherrypy.tree.mount(ActuatorControlWebServer(ip, port, actuators_endpoint), f'/{actuators_endpoint}', conf)
     
