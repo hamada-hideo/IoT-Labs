@@ -1,8 +1,0 @@
-{
-    "ip": "127.0.0.1",
-    "port": 8082,
-    "endpoint": "log",
-    "mqtt": {
-        "sub_topic": "/tiot/group12/#"
-    }
-}
