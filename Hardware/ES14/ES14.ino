@@ -1,3 +1,12 @@
+// EXERCISE: Software Lab - Part 3: Physical Hardware Integration
+// ACTOR: Arduino Nano 33 BLE Sense (Edge Node IoT Node)
+// DESCRIPTION: Complete physical node firmware. Automatically contacts the REST
+//              Catalog to fetch broker info, registers multiple sub-devices, 
+//              streams native multi-sensor telemetry (PIR, Temp, Microphone PDM), 
+//              and processes incoming MQTT configurations to drive real actuators.
+
+
+// SECTION 1: SYSTEM HEADERS, EXTERNAL LIBRARIES & LNK CONFIGURATION
 #include <WiFiNINA.h>
 #include <ArduinoHttpClient.h>
 #include <PubSubClient.h>
@@ -21,6 +30,7 @@ const String BASE_TOPIC = "/tiot/group12/smart_home/" + NODE_ID + "/";
 const String REGISTRATION_URL = "/catalog/devices";
 const String TELEMETRY_TOPIC = "/tiot/group12/sensors/telemetry";
 
+// SECTION 2: OBJECT INSTANTIATION & RESOURCE CONSTANTS BOUNDARIES
 WiFiClient wifi_mqtt; 
 WiFiClient wifi_http; 
 PubSubClient mqtt_client(wifi_mqtt); 
@@ -53,7 +63,7 @@ bool current_green_light = false;
 
 const int RETRY_TIME = 5000;
 const int REFRESH_LOOP_TIME = 5000;
-
+//SECTION 3: RECTIFICATION DATA TYPES & COMPONENT BLUEPRINT INVENTORIES
 struct Device {
   String id;
   bool is_actuator;
@@ -75,7 +85,7 @@ Device devices[] = {
 const int NUM_DEVICES = sizeof(devices) / sizeof(devices[0]);
 
 void onPDMdata();
-
+// SECTION 4: HARDWARE PIN INITIALIZATION & BOOTSTRAP NETWORK LOOKUPS
 void setup() {
   Serial.begin(9600);
   
@@ -134,7 +144,7 @@ void setup() {
   mqtt_client.setBufferSize(512); 
   mqtt_client.setCallback(callback);
 }
-
+// SECTION 5: SYSTEM LOOP CAPABILITY ENGINES (RUN FLOW)
 void loop() {
   if (!mqtt_client.connected()) {
     if (millis() - last_mqtt_reconnect > 5000 || last_mqtt_reconnect == 0) {
@@ -234,13 +244,13 @@ void loop() {
     last_publish = millis();
   }
 }
-
+// SECTION 6: INTERRUPT HARDWARE DRIVERS (PERIPHERAL SAMPLING)
 void onPDMdata() {
   int bytesAvailable = PDM.available();
   PDM.read(sampleBuffer, bytesAvailable);
   samplesRead = bytesAvailable / 2;
 }
-
+// SECTION 7: MQTT DOWN-LINK COMMAND DISPATCHER CALLBACKS
 void callback(char* topic, byte* payload, unsigned int length) { 
   Serial.print("[MQTT RX] Ricevuto comando su: ");
   Serial.println(topic);
@@ -289,7 +299,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
     }
   }
 }
-
+// SECTION 8: REST INTERFACE SYSTEM REGISTRATION CAPABILITIES
 void register_refresh_device(int i) {
   if (!devices[i].registered) {
     if (register_device(i)) {
@@ -303,6 +313,7 @@ void register_refresh_device(int i) {
 }
 
 bool register_device(int i) {
+  """Constructs a JSON registry description schema and transmits it using HTTP POST."""
   doc_reg.clear();
   String dev_id = NODE_ID + "/" + devices[i].id;
   doc_reg["id"] = dev_id;
@@ -334,6 +345,7 @@ bool register_device(int i) {
 }
 
 bool refresh_device(int i) {
+  """Issues a lightweight HTTP PUT keep-alive to refresh the device lifespan on the Catalog."""
   String dev_id = NODE_ID + "/" + devices[i].id;
   http_client.put(REGISTRATION_URL + "/" + dev_id, "application/json", "{}");
   int putCode = http_client.responseStatusCode(); 
