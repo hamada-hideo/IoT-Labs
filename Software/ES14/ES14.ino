@@ -5,7 +5,6 @@
 //              streams native multi-sensor telemetry (PIR, Temp, Microphone PDM), 
 //              and processes incoming MQTT configurations to drive real actuators.
 
-
 // SECTION 1: SYSTEM HEADERS, EXTERNAL LIBRARIES & LNK CONFIGURATION
 #include <WiFiNINA.h>
 #include <ArduinoHttpClient.h>
@@ -13,22 +12,23 @@
 #include <ArduinoJson.h>
 #include <Arduino_LSM6DSOX.h> 
 #include <PDM.h>              
-#include "arduino_secrets.h" 
 #include <LiquidCrystal_PCF8574.h> 
 
-char ssid[] = SECRET_SSID; 
-char pass[] = SECRET_PASS; 
+// --- HARDCODED CONFIGURATION ---
+char ssid[] = ""; 
+char pass[] = ""; 
 
-const char* catalog_address = SECRET_CATALOG_IP; 
+const char* catalog_address = ""; 
 int catalog_port = 8080; 
 
 String broker_address = "";
 int broker_port = 1883;
 
-const String NODE_ID = SECRET_NODE_ID; 
+const String NODE_ID = "arduino_base"; 
 const String BASE_TOPIC = "/tiot/group12/smart_home/" + NODE_ID + "/"; 
 const String REGISTRATION_URL = "/catalog/devices";
 const String TELEMETRY_TOPIC = "/tiot/group12/sensors/telemetry";
+// -------------------------------
 
 // SECTION 2: OBJECT INSTANTIATION & RESOURCE CONSTANTS BOUNDARIES
 WiFiClient wifi_mqtt; 
@@ -63,7 +63,8 @@ bool current_green_light = false;
 
 const int RETRY_TIME = 5000;
 const int REFRESH_LOOP_TIME = 60000;
-//SECTION 3: RECTIFICATION DATA TYPES & COMPONENT BLUEPRINT INVENTORIES
+
+// SECTION 3: RECTIFICATION DATA TYPES & COMPONENT BLUEPRINT INVENTORIES
 struct Device {
   String id;
   bool is_actuator;
@@ -85,6 +86,7 @@ Device devices[] = {
 const int NUM_DEVICES = sizeof(devices) / sizeof(devices[0]);
 
 void onPDMdata();
+
 // SECTION 4: HARDWARE PIN INITIALIZATION & BOOTSTRAP NETWORK LOOKUPS
 void setup() {
   Serial.begin(9600);
@@ -97,12 +99,12 @@ void setup() {
   lcd.begin(16, 2);
   lcd.setBacklight(255);
   lcd.clear();
-  lcd.print("Connessione...");
+  lcd.print("Connecting...");
 
   while (WiFi.begin(ssid, pass) != WL_CONNECTED) {
     delay(1000);
   }
-  Serial.println("WiFi Connesso!");
+  Serial.println("WiFi Connected!");
 
   IMU.begin();
   PDM.onReceive(onPDMdata);
@@ -110,7 +112,7 @@ void setup() {
 
   http_client.setTimeout(3000);
 
-  Serial.print("Cerco il Catalogo all'IP: ");
+  Serial.print("Searching for Catalog at IP: ");
   Serial.println(catalog_address);
 
   http_client.get("/catalog/broker"); 
@@ -118,18 +120,18 @@ void setup() {
   String get_response = http_client.responseBody();
   http_client.stop();
 
-  Serial.print("Risposta Broker GET: ");
+  Serial.print("Broker GET response: ");
   Serial.println(get_statusCode);
 
   while (get_statusCode != 200) {
-    Serial.println("Catalog irraggiungibile, riprovo");
+    Serial.println("Catalog unreachable, retrying...");
     delay(RETRY_TIME);
     http_client.get("/catalog/broker");
     get_statusCode = http_client.responseStatusCode();
     get_response = http_client.responseBody();
     http_client.stop();
 
-    Serial.print("Risposta Broker GET: ");
+    Serial.print("Broker GET response: ");
     Serial.println(get_statusCode);
   }
 
@@ -137,13 +139,14 @@ void setup() {
   broker_address = doc_catalog_rx["ip"].as<String>();
   broker_port = doc_catalog_rx["port"].as<int>();
 
-  Serial.print("Broker IP Finale: ");
+  Serial.print("Final Broker IP: ");
   Serial.println(broker_address);
 
   mqtt_client.setServer(broker_address.c_str(), broker_port);
   mqtt_client.setBufferSize(512); 
   mqtt_client.setCallback(callback);
 }
+
 // SECTION 5: SYSTEM LOOP CAPABILITY ENGINES (RUN FLOW)
 void loop() {
   if (!mqtt_client.connected()) {
@@ -151,7 +154,7 @@ void loop() {
       last_mqtt_reconnect = millis();
       String client_id = "ArduinoEdge-" + String(random(0xffff), HEX);
       if (mqtt_client.connect(client_id.c_str())) {
-        Serial.println(">>> MQTT CONNESSO CON SUCCESSO! <<<");
+        Serial.println(">>> MQTT SUCCESSFULLY CONNECTED! <<<");
         String sub_topic = BASE_TOPIC + "+/config";
         mqtt_client.subscribe(sub_topic.c_str());
       }
@@ -164,15 +167,15 @@ void loop() {
     for(int i = 0; i < NUM_DEVICES; i++) {
       register_refresh_device(i);
     }
-    Serial.println("[APP] Keep-Alive REST inviato in background.");
+    Serial.println("[APP] Background REST Keep-Alive sent.");
     last_keepalive = millis();
   }
 
-  // --- LOGICA MICROFONO BLINDATA ANTI-FREEZE ---
+  // --- ANTI-FREEZE MICROPHONE LOGIC ---
   if (samplesRead) {
     noInterrupts();
     int currentSamples = samplesRead;
-    if (currentSamples > 256) currentSamples = 256; // Sicurezza buffer
+    if (currentSamples > 256) currentSamples = 256; // Buffer safety
     short localBuffer[256];
     memcpy(localBuffer, sampleBuffer, currentSamples * 2); 
     samplesRead = 0; 
@@ -189,7 +192,7 @@ void loop() {
 
       if(a > clapThresh && (millis() - lastTime) > clapDuration) {
         
-        // IL FIX: Se è passato troppo tempo da un vecchio rumore a caso, si resetta!
+        // FIX: If too much time has passed since a random old noise, reset it!
         if (k > 0 && (millis() - begTime) > clapInterval) {
           k = 0;
         }
@@ -203,7 +206,7 @@ void loop() {
 
         if(k == nClaps) {
           clapDetected = true; 
-          k = 0; // Reset pulito post-attivazione
+          k = 0; // Clean reset post-activation
         }
       }
     }
@@ -218,7 +221,7 @@ void loop() {
       
       if (mqtt_client.connected()) {
         mqtt_client.publish(TELEMETRY_TOPIC.c_str(), event_output.c_str());
-        Serial.println("\n[APP] --- Clap Inviato a Python! ---");
+        Serial.println("\n[APP] --- Clap Sent to Python! ---");
       }
     }
   }
@@ -239,20 +242,22 @@ void loop() {
     String output; serializeJson(doc_snd, output); 
     if (mqtt_client.connected()) {
         mqtt_client.publish(TELEMETRY_TOPIC.c_str(), output.c_str()); 
-        Serial.println("[APP] Telemetria ambientale inviata.");
+        Serial.println("[APP] Environmental telemetry sent.");
     }
     last_publish = millis();
   }
 }
+
 // SECTION 6: INTERRUPT HARDWARE DRIVERS (PERIPHERAL SAMPLING)
 void onPDMdata() {
   int bytesAvailable = PDM.available();
   PDM.read(sampleBuffer, bytesAvailable);
   samplesRead = bytesAvailable / 2;
 }
+
 // SECTION 7: MQTT DOWN-LINK COMMAND DISPATCHER CALLBACKS
 void callback(char* topic, byte* payload, unsigned int length) { 
-  Serial.print("[MQTT RX] Ricevuto comando su: ");
+  Serial.print("[MQTT RX] Command received on: ");
   Serial.println(topic);
 
   StaticJsonDocument<512> doc_rec; 
@@ -271,7 +276,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
     String resource_name = doc_rec["e"][0]["n"].as<String>();
     if (resource_name.endsWith("_toggle")) {
       current_green_light = !current_green_light; 
-      Serial.println("[AZIONE] Eseguito TOGGLE su Luce Verde!");
+      Serial.println("[ACTION] Green Light TOGGLE executed!");
     } else {
       current_green_light = doc_rec["e"][0]["v"].as<bool>(); 
     }
@@ -299,6 +304,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
     }
   }
 }
+
 // SECTION 8: REST INTERFACE SYSTEM REGISTRATION CAPABILITIES
 void register_refresh_device(int i) {
   if (!devices[i].registered) {
@@ -313,7 +319,7 @@ void register_refresh_device(int i) {
 }
 
 bool register_device(int i) {
-  """Constructs a JSON registry description schema and transmits it using HTTP POST."""
+  // Constructs a JSON registry description schema and transmits it using HTTP POST.
   doc_reg.clear();
   String dev_id = NODE_ID + "/" + devices[i].id;
   doc_reg["id"] = dev_id;
@@ -327,7 +333,7 @@ bool register_device(int i) {
     mqtt_info["command_topic"] = BASE_TOPIC + devices[i].id + "/config";
     mqtt_info["feedback_topic"] = BASE_TOPIC + dev_id + "/state";
     if (i != 3) {
-      mqtt_info["logger_topic"] = mqtt_info["command_topic"]; // do not log every lcd screeen change
+      mqtt_info["logger_topic"] = mqtt_info["command_topic"]; // do not log every lcd screen change
     }
   } else {
     mqtt_info["pub_topic"] = TELEMETRY_TOPIC;
@@ -345,7 +351,7 @@ bool register_device(int i) {
 }
 
 bool refresh_device(int i) {
-  """Issues a lightweight HTTP PUT keep-alive to refresh the device lifespan on the Catalog."""
+  // Issues a lightweight HTTP PUT keep-alive to refresh the device lifespan on the Catalog.
   String dev_id = NODE_ID + "/" + devices[i].id;
   http_client.put(REGISTRATION_URL + "/" + dev_id, "application/json", "{}");
   int putCode = http_client.responseStatusCode(); 

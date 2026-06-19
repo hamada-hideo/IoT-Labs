@@ -314,7 +314,6 @@ class ActuatorControlWebServer:
 
         raise cherrypy.HTTPError(400, "URI format: /actuators[/<room>[/<device_id>]]")
 
-
     def POST(self,*uri,**params):
         """
         Handles HTTP POST requests. Decodes validation commands, updates states, 
