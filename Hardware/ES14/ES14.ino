@@ -51,7 +51,8 @@ int clapDuration = 200;
 
 bool current_green_light = false; 
 
-int retry_time = 5;
+const int RETRY_TIME = 5000;
+const int REFRESH_LOOP_TIME = 5000;
 
 struct Device {
   String id;
@@ -68,6 +69,7 @@ Device devices[] = {
   {"lcd", true, "lcd", "string", false},
   {"temperature", false, "temperature", "Cel", false},
   {"motion", false, "motion", "bool", false},
+  {"clap_sensor", false, "clap_sensor", "bool", false}
 };
 
 const int NUM_DEVICES = sizeof(devices) / sizeof(devices[0]);
@@ -110,8 +112,8 @@ void setup() {
   Serial.println(get_statusCode);
 
   while (get_statusCode != 200) {
-    Serial.print("Catalog irraggiungibile, riprovo tra "); Serial.print(retry_time); Serial.println("s");
-    delay(retry_time*1000);
+    Serial.println("Catalog irraggiungibile, riprovo");
+    delay(RETRY_TIME);
     http_client.get("/catalog/broker");
     get_statusCode = http_client.responseStatusCode();
     get_response = http_client.responseBody();
@@ -127,37 +129,6 @@ void setup() {
 
   Serial.print("Broker IP Finale: ");
   Serial.println(broker_address);
-
-  Serial.println("Inizio registrazione REST...");
-  for(int i = 0; i < NUM_DEVICES; i++) {
-    doc_reg.clear();
-    String dev_id = NODE_ID + "/" + devices[i].id;
-    doc_reg["id"] = dev_id;
-    doc_reg["description"] = "Arduino actuator " + dev_id;
-    JsonObject res = doc_reg.createNestedObject("resources");
-    res["type"] = devices[i].type; 
-    res["unit"] = devices[i].unit;
-    JsonObject mqtt_info = doc_reg.createNestedObject("mqtt");
-
-    if (devices[i].is_actuator) {
-      mqtt_info["command_topic"] = BASE_TOPIC + dev_id + "/config";
-      mqtt_info["feedback_topic"] = BASE_TOPIC + dev_id + "/state";
-      if (i != 3) {
-        mqtt_info["logger_topic"] = mqtt_info["command_topic"]; // do not log every lcd screeen change
-      }
-    } else {
-      mqtt_info["pub_topic"] = TELEMETRY_TOPIC;
-      mqtt_info["logger_topic"] = TELEMETRY_TOPIC;
-    }
-
-    String reg_body; serializeJson(doc_reg, reg_body);
-    http_client.post(REGISTRATION_URL, "application/json", reg_body);
-    int postCode = http_client.responseStatusCode(); 
-    http_client.responseBody(); 
-    http_client.stop();
-    delay(100); 
-  }
-  lcd.clear(); lcd.print("Reg. REST OK!"); delay(1000);
 
   mqtt_client.setServer(broker_address.c_str(), broker_port);
   mqtt_client.setBufferSize(512); 
@@ -177,6 +148,14 @@ void loop() {
     }
   } else {
     mqtt_client.loop(); 
+  }
+
+  if (millis() - last_keepalive > REFRESH_LOOP_TIME) {
+    for(int i = 0; i < NUM_DEVICES; i++) {
+      register_refresh_device(i);
+    }
+    Serial.println("[APP] Keep-Alive REST inviato in background.");
+    last_keepalive = millis();
   }
 
   // --- LOGICA MICROFONO BLINDATA ANTI-FREEZE ---
@@ -254,29 +233,6 @@ void loop() {
     }
     last_publish = millis();
   }
-
-  if (millis() - last_keepalive > 5000) {
-    const char* actuators[][3] = {
-      {"heater", "heater", "percent"}, 
-      {"green_lights", "green_lights", "bool"},
-      {"fan", "fan", "percent"}, 
-      {"lcd", "lcd", "string"}
-    };
-    const char* sensors[][3] = {
-      {"clap_sensor", "clap_sensor", "bool"},
-      {"temperature", "temperature", "Cel"},
-      {"motion", "motion", "bool"}
-    };
-    for(int i = 0; i < NUM_DEVICES; i++) {
-      String dev_id = NODE_ID + "/" + devices[i].id;
-      http_client.put(REGISTRATION_URL + "/" + dev_id, "application/json", "{}");
-      http_client.responseStatusCode(); http_client.responseBody(); 
-      http_client.stop(); 
-      delay(150); 
-    }
-    Serial.println("[APP] Keep-Alive REST inviato in background.");
-    last_keepalive = millis();
-  }
 }
 
 void onPDMdata() {
@@ -332,4 +288,57 @@ void callback(char* topic, byte* payload, unsigned int length) {
       lcd.setCursor(0, 0); lcd.print(text); 
     }
   }
+}
+
+void register_refresh_device(int i) {
+  if (!devices[i].registered) {
+    if (register_device(i)) {
+      devices[i].registered = true;
+    }
+  } else {
+    if (!refresh_device(i)) {
+      devices[i].registered = false;
+    }
+  }
+}
+
+bool register_device(int i) {
+  doc_reg.clear();
+  String dev_id = NODE_ID + "/" + devices[i].id;
+  doc_reg["id"] = dev_id;
+  doc_reg["description"] = "Arduino actuator " + dev_id;
+  JsonObject res = doc_reg.createNestedObject("resources");
+  res["type"] = devices[i].type; 
+  res["unit"] = devices[i].unit;
+  JsonObject mqtt_info = doc_reg.createNestedObject("mqtt");
+
+  if (devices[i].is_actuator) {
+    mqtt_info["command_topic"] = BASE_TOPIC + dev_id + "/config";
+    mqtt_info["feedback_topic"] = BASE_TOPIC + dev_id + "/state";
+    if (i != 3) {
+      mqtt_info["logger_topic"] = mqtt_info["command_topic"]; // do not log every lcd screeen change
+    }
+  } else {
+    mqtt_info["pub_topic"] = TELEMETRY_TOPIC;
+    mqtt_info["logger_topic"] = TELEMETRY_TOPIC;
+  }
+
+  String reg_body; serializeJson(doc_reg, reg_body);
+  http_client.post(REGISTRATION_URL, "application/json", reg_body);
+  int postCode = http_client.responseStatusCode(); 
+  http_client.responseBody(); 
+  http_client.stop();
+  delay(100);   
+
+  return postCode == 200;
+}
+
+bool refresh_device(int i) {
+  String dev_id = NODE_ID + "/" + devices[i].id;
+  http_client.put(REGISTRATION_URL + "/" + dev_id, "application/json", "{}");
+  int putCode = http_client.responseStatusCode(); 
+  http_client.responseBody(); 
+  http_client.stop(); 
+  delay(150); 
+  return putCode == 200;
 }
