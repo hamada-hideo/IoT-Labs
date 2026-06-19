@@ -7,7 +7,7 @@ char ssid[] = SECRET_SSID;
 char pass[] = SECRET_PASS;
 
 // Sostituisci con l'indirizzo IP locale del tuo PC dove è in esecuzione main_logger.py
-char serverAddress[] = "10.170.134.233"; 
+char serverAddress[] = "10.108.52.52"; 
 int port =8080; // La porta del LoggerWebServer definita nel tuo Globals.py
 
 WiFiClient wifi;

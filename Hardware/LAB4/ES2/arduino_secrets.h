@@ -1,2 +1,2 @@
-#define SECRET_SSID "A54 di Mattia"
-#define SECRET_PASS "12211221"
+#define SECRET_SSID "P80"
+#define SECRET_PASS "HotspotVictor"
