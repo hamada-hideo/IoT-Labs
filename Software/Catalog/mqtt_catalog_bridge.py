@@ -66,7 +66,7 @@ class MQTTCatalogBridge:
             print(f"[MQTT] Errore di connessione. Codice: {rc}")
 
     def on_message(self, client, userdata, msg):
-           """
+        """
         Central message dispatcher triggered when a packet is published on any subscribed topic.
         """
         try:

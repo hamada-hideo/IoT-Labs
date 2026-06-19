@@ -306,14 +306,14 @@ bool register_device(int i) {
   doc_reg.clear();
   String dev_id = NODE_ID + "/" + devices[i].id;
   doc_reg["id"] = dev_id;
-  doc_reg["description"] = "Arduino actuator " + dev_id;
+  doc_reg["description"] = "Arduino actuator " + devices[i].id;
   JsonObject res = doc_reg.createNestedObject("resources");
   res["type"] = devices[i].type; 
   res["unit"] = devices[i].unit;
   JsonObject mqtt_info = doc_reg.createNestedObject("mqtt");
 
   if (devices[i].is_actuator) {
-    mqtt_info["command_topic"] = BASE_TOPIC + dev_id + "/config";
+    mqtt_info["command_topic"] = BASE_TOPIC + devices[i].id + "/config";
     mqtt_info["feedback_topic"] = BASE_TOPIC + dev_id + "/state";
     if (i != 3) {
       mqtt_info["logger_topic"] = mqtt_info["command_topic"]; // do not log every lcd screeen change

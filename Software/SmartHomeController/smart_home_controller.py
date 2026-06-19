@@ -259,7 +259,3 @@ class SmartHomeController:
         except KeyboardInterrupt:
             self.is_running = False
             self.client.disconnect()
-
-if __name__ == "__main__":
-    controller = SmartHomeController()
-    controller.start()
