@@ -49,8 +49,9 @@ int nClaps = 2;
 int clapInterval = 3000; 
 int clapDuration = 200; 
 
-bool isRunning = true; 
 bool current_green_light = false; 
+
+int retry_time = 5;
 
 void onPDMdata();
 
@@ -89,17 +90,21 @@ void setup() {
   Serial.print("Risposta Broker GET: ");
   Serial.println(get_statusCode);
 
-  if (get_statusCode == 200) {
-    deserializeJson(doc_catalog_rx, get_response);
-    broker_address = doc_catalog_rx["ip"].as<String>();
-    broker_port = doc_catalog_rx["port"].as<int>();
-    
-    if (broker_address == "127.0.0.1" || broker_address == "localhost") {
-      broker_address = catalog_address; 
-    }
-  } else {
-    broker_address = "broker.emqx.io";
+  while (get_statusCode != 200) {
+    Serial.print("Catalog irraggiungibile, riprovo tra "); Serial.print(retry_time); Serial.println("s");
+    delay(retry_time*1000);
+    http_client.get("/catalog/broker");
+    get_statusCode = http_client.responseStatusCode();
+    get_response = http_client.responseBody();
+    http_client.stop();
+
+    Serial.print("Risposta Broker GET: ");
+    Serial.println(get_statusCode);
   }
+
+  deserializeJson(doc_catalog_rx, get_response);
+  broker_address = doc_catalog_rx["ip"].as<String>();
+  broker_port = doc_catalog_rx["port"].as<int>();
 
   Serial.print("Broker IP Finale: ");
   Serial.println(broker_address);
@@ -196,7 +201,6 @@ void loop() {
     for (int i = 0; i < currentSamples; i++) {
       int a = abs(localBuffer[i]); 
       if (a > current_noise_peak) current_noise_peak = a;
-      if (!isRunning) continue;
 
       if(a > clapThresh && (millis() - lastTime) > clapDuration) {
         
@@ -233,8 +237,6 @@ void loop() {
       }
     }
   }
-
-  if (!isRunning) return; 
 
   if (millis() - last_publish > 10000) { 
     int raw_temp = 25; 
