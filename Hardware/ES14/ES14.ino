@@ -19,6 +19,7 @@ int broker_port = 1883;
 const String NODE_ID = SECRET_NODE_ID; 
 const String BASE_TOPIC = "/tiot/group12/smart_home/" + NODE_ID + "/"; 
 const String REGISTRATION_URL = "/catalog/devices";
+const String TELEMETRY_TOPIC = "/tiot/group12/sensors/telemetry";
 
 WiFiClient wifi_mqtt; 
 WiFiClient wifi_http; 
@@ -109,13 +110,18 @@ void setup() {
     {"fan", "fan", "percent"},
     {"lcd", "lcd", "string"}
   };
+  const char* sensors[][3] = {
+    {"clap_sensor", "clap_sensor", "bool"},
+    {"temperature", "temperature", "Cel"},
+    {"motion", "motion", "bool"}
+  };
 
   Serial.println("Inizio registrazione REST...");
   for(int i = 0; i < 4; i++) {
     doc_reg.clear();
     String dev_id = NODE_ID + "/" + String(actuators[i][0]);
     doc_reg["id"] = dev_id;
-    doc_reg["description"] = "Modular Edge Node Component";
+    doc_reg["description"] = "Arduino actuator " + dev_id;
     JsonObject res = doc_reg.createNestedObject("resources");
     res["type"] = actuators[i][1]; res["unit"] = actuators[i][2];
     JsonObject mqtt_info = doc_reg.createNestedObject("mqtt");
@@ -124,6 +130,24 @@ void setup() {
     if (i != 3) {
       mqtt_info["logger_topic"] = mqtt_info["command_topic"]; // do not log every lcd screeen change
     }
+
+    String reg_body; serializeJson(doc_reg, reg_body);
+    http_client.post(REGISTRATION_URL, "application/json", reg_body);
+    int postCode = http_client.responseStatusCode(); 
+    http_client.responseBody(); 
+    http_client.stop();
+    delay(100); 
+  }
+  for(int i = 0; i < 3; i++) {
+    doc_reg.clear();
+    String dev_id = NODE_ID + "/" + String(sensors[i][0]);
+    doc_reg["id"] = dev_id;
+    doc_reg["description"] = "Arduino sensor " + dev_id;
+    JsonObject res = doc_reg.createNestedObject("resources");
+    res["type"] = sensors[i][1]; res["unit"] = sensors[i][2];
+    JsonObject mqtt_info = doc_reg.createNestedObject("mqtt");
+    mqtt_info["pub_topic"] = TELEMETRY_TOPIC;
+    mqtt_info["logger_topic"] = TELEMETRY_TOPIC;
 
     String reg_body; serializeJson(doc_reg, reg_body);
     http_client.post(REGISTRATION_URL, "application/json", reg_body);
@@ -204,7 +228,7 @@ void loop() {
       String event_output; serializeJson(doc_event, event_output);
       
       if (mqtt_client.connected()) {
-        mqtt_client.publish("/tiot/group12/sensors/telemetry", event_output.c_str());
+        mqtt_client.publish(TELEMETRY_TOPIC.c_str(), event_output.c_str());
         Serial.println("\n[APP] --- Clap Inviato a Python! ---");
       }
     }
@@ -227,7 +251,7 @@ void loop() {
 
     String output; serializeJson(doc_snd, output); 
     if (mqtt_client.connected()) {
-        mqtt_client.publish("/tiot/group12/sensors/telemetry", output.c_str()); 
+        mqtt_client.publish(TELEMETRY_TOPIC.c_str(), output.c_str()); 
         Serial.println("[APP] Telemetria ambientale inviata.");
     }
     last_publish = millis();
@@ -240,8 +264,20 @@ void loop() {
       {"fan", "fan", "percent"}, 
       {"lcd", "lcd", "string"}
     };
+    const char* sensors[][3] = {
+      {"clap_sensor", "clap_sensor", "bool"},
+      {"temperature", "temperature", "Cel"},
+      {"motion", "motion", "bool"}
+    };
     for(int i = 0; i < 4; i++) {
       String dev_id = NODE_ID + "/" + String(actuators[i][0]);
+      http_client.put(REGISTRATION_URL + "/" + dev_id, "application/json", "{}");
+      http_client.responseStatusCode(); http_client.responseBody(); 
+      http_client.stop(); 
+      delay(150); 
+    }
+    for(int i = 0; i < 3; i++) {
+      String dev_id = NODE_ID + "/" + String(sensors[i][0]);
       http_client.put(REGISTRATION_URL + "/" + dev_id, "application/json", "{}");
       http_client.responseStatusCode(); http_client.responseBody(); 
       http_client.stop(); 
