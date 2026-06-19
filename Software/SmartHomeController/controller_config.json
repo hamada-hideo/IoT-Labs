@@ -3,7 +3,7 @@
         "global_sub_topic": "/tiot/group12/sensors/telemetry",
         "alert_topic": "/tiot/group12/alerts"
     },
-    "presence_timeout_seconds": 1800,
+    "presence_timeout_seconds": 10,
     "rolling_window_size": 5,
     "target_temperature": 22.0,
     "critical_temperature": 35.0,
@@ -26,14 +26,10 @@
             "off": 0,
             "on": 1
         },
-        "thermostat": {
-            "off": 0,
-            "heating": 1,
-            "cooling": 2
-        },
         "blinds": {
-            "closed": 0,
-            "open": 100
+            "closed": 100,
+            "open": 0,
+            "middle": 50
         }
     }
 }

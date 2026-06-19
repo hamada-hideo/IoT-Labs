@@ -41,8 +41,7 @@ class SmartHomeController:
 
         act_cmds = self.config.get("actuator_commands", {})
         self.cmd_lights = act_cmds.get("lights", {"off": 0, "on": 1})
-        self.cmd_blinds = act_cmds.get("blinds", {"closed": 0, "open": 100})
-        # Note: Thermostat logic now uses float temperatures (set-points) directly
+        self.cmd_blinds = act_cmds.get("blinds", {"closed": 100, "open": 0})
 
         self.lcd_data = {}
         self.lcd_screen_index = 0
@@ -229,29 +228,19 @@ class SmartHomeController:
 
         # 2. THERMOSTAT & BLINDS LOGIC
         if presence:
-            # Comfort Mode: Set thermostat to ideal target (e.g., 22.0°C)
-            self._dispatch_by_type(room, "thermostat", self.target_temp) 
-            
-            if temperature > self.target_temp:
-                self._dispatch_by_type(room, "blinds", self.cmd_blinds["closed"])     
-            elif temperature < (self.target_temp - 2.0):
-                self._dispatch_by_type(room, "blinds", self.cmd_blinds["open"])   
-            else:
-                self._dispatch_by_type(room, "blinds", self.cmd_blinds["open"])   
+            low, high = self.LLT1, self.HLT1
         else:
-            # Eco Mode: Set thermostat to eco-friendly limits to save energy
-            if temperature > (self.target_temp + 5.0):
-                eco_cooling_target = self.target_temp + 5.0 # e.g., 27.0°C
-                self._dispatch_by_type(room, "thermostat", eco_cooling_target) 
-                self._dispatch_by_type(room, "blinds", self.cmd_blinds["closed"])     
-            elif temperature < 15.0:
-                eco_heating_target = 15.0 # Eco winter protection
-                self._dispatch_by_type(room, "thermostat", eco_heating_target) 
-                self._dispatch_by_type(room, "blinds", self.cmd_blinds["open"])   
-            else:
-                # Dead zone: Keep base eco setpoint and close blinds for insulation
-                self._dispatch_by_type(room, "thermostat", 15.0) 
-                self._dispatch_by_type(room, "blinds", self.cmd_blinds["closed"])     
+            low, high = self.LLT2, self.HLT2
+
+        therm_val = (low+high)/2
+        self._dispatch_by_type(room, "thermostat", therm_val)
+        
+        if temperature > high:
+            self._dispatch_by_type(room, "blinds", self.cmd_blinds["closed"])
+        elif temperature < low:
+            self._dispatch_by_type(room, "blinds", self.cmd_blinds["open"])
+        else:
+            self._dispatch_by_type(room, "blinds", self.cmd_blinds["middle"])
 
     def start(self):
         self._get_broker_loop()
