@@ -62,7 +62,7 @@ int clapDuration = 200;
 bool current_green_light = false; 
 
 const int RETRY_TIME = 5000;
-const int REFRESH_LOOP_TIME = 5000;
+const int REFRESH_LOOP_TIME = 60000;
 //SECTION 3: RECTIFICATION DATA TYPES & COMPONENT BLUEPRINT INVENTORIES
 struct Device {
   String id;

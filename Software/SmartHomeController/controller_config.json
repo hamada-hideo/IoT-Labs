@@ -26,14 +26,10 @@
             "off": 0,
             "on": 1
         },
-        "thermostat": {
-            "off": 0,
-            "heating": 1,
-            "cooling": 2
-        },
         "blinds": {
-            "closed": 0,
-            "open": 100
+            "closed": 100,
+            "open": 0,
+            "middle": 50
         }
     }
 }

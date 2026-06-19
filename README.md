@@ -1,37 +1,27 @@
 # Laboratori di IoT 
 
-## Stato di avanzamento
+## 1. Configurazione Python
 
-- [x] Lab1: Hardware Part 1
-- [x] Lab2: Hardware Part 2
-- [x] Lab3: Software Part 1
-- [x] Lab4: Hardware Part 3
-- [x] Lab5: Software Part 2
-- [x] Lab6: Software Part 3
-
-## Istruzioni di Avvio - Ecosistema IoT Gruppo 12
-
-### 1. Configurazione Python
 Per installare le dipendenze Python esterne necessarie per il Controller, i WebServer e il Catalogo, aprire il terminale ed eseguire:
 
 ```
 pip install -r requirements.txt
 ```
 
-Per tirare su un servizio:
+Per lanciare il sistema in modalità distribuita è necessario modificare il file di configurazione di ogni elemento software, impostando l'IP del dispositivo su cui verrà eseguita.
 
-- Copiare il file `network_config_template.json` in un nuovo file `network_config.json`
-- Modificare l'indirizzo ip nel file `network_config.json` con il proprio indirizzo ip ed eventualmente gli altri valori, lasciando intatta la struttura
-- Tirare su il servizio
-### 2. Configurazione Hardware (Arduino)
-Prima di compilare lo sketch `ES14.ino`, assicurarsi di aver installato le seguenti librerie tramite il Gestore Librerie dell'IDE Arduino:
+Di default tali file contengono l'indirizzo `127.0.0.1`, quindi per lanciare il sistema su un solo PC non è necessaria alcuna modifica.
+
+## 2. Configurazione Hardware (Arduino)
+
+Librerie necessarie per eseguire gli sketch:
+
 - WiFiNINA
 - ArduinoHttpClient
 - PubSubClient
 - ArduinoJson
-- Arduino_LSM6DSOX (per la temperatura)
-- PDM (per il microfono)
-- LiquidCrystal_PCF8574 (per il display I2C)
+- Arduino_LSM6DSOX
+- PDM
+- LiquidCrystal_PCF8574
 
-> ATTENZIONE: Aprire il file `arduino_secrets.h` e inserire le credenziali Wi-Fi e l'indirizzo IP locale del PC che ospita il server REST del Catalogo prima del flash.
-
+Per gli sketch che richiedono di interagire con un PC tramite le API REST è necessario creare un file `arduino_secrets.h` e inserire le credenziali Wi-Fi e l'indirizzo IP locale del PC.
