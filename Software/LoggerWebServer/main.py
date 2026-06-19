@@ -1,3 +1,4 @@
+# SECTION 1: CORE ENVIRONMENT SETUP & IMPORT LATENCY
 import cherrypy
 import os
 import sys
@@ -8,15 +9,14 @@ sys.path.append(BASE_DIR)
 DIR = os.path.dirname(os.path.abspath(__file__))
 
 from LoggerWebServer.logger_webserver import LoggerWebServer
-
+# SECTION 2: CONTEXT EXECUTION RUNNER (MAIN BLOCK)
 if __name__ == '__main__':
     with open(os.path.join(DIR, "network_config.json")) as f:
         data = json.load(f)
     ip = data["ip"]
     port = data["port"]
     endpoint = data["endpoint"]
-    # 2. Configurazione obbligatoria per abilitare i verbi HTTP REST (MethodDispatcher)
-    # e impostare gli header JSON in uscita
+    
     conf = {
         '/': {
             'request.dispatch': cherrypy.dispatch.MethodDispatcher(),
@@ -27,11 +27,11 @@ if __name__ == '__main__':
     }
 
     cherrypy.tree.mount(LoggerWebServer(ip, port, endpoint), f"/{endpoint}", conf)
-
-    # 4. Impostiamo l'host e la porta
+    # SECTION 3: SERVER ENGINE CONFIGURATION & STARTUP
+    # setting host and ports
     cherrypy.config.update({'server.socket_host': '0.0.0.0'})
     cherrypy.config.update({'server.socket_port': port})
 
-    # 5. Avviamo il server in modalità bloccante
+  
     cherrypy.engine.start()
     cherrypy.engine.block()
