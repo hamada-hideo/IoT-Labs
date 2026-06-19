@@ -5,8 +5,15 @@ import json
 import requests
 import threading
 import os
+import sys
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(BASE_DIR)
+
 import SenMLUtils as SenML
 from Catalog.catalog_client import *
+# Importiamo il nuovo bridge creato
+from SensorReadingActuatorControlWebServer.mqtt_sensors_bridge import MQTTSensorsBridge
 
 DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -41,8 +48,11 @@ class SensorReadingWebServer(object):
         threading.Thread(target=self._try_register_refresh_loop, daemon=True).start()
 
         self.logger_url_valid = False
-        
         threading.Thread(target=self._try_get_logger_url, daemon=True).start()
+
+        # Inizializza e lancia in parallelo il bridge MQTT per la telemetria
+        self.mqtt_bridge = MQTTSensorsBridge(self)
+        threading.Thread(target=self.mqtt_bridge.run, daemon=True).start()
 
     def _try_register_refresh_loop(self):
         while True:
@@ -176,8 +186,15 @@ class SensorReadingWebServer(object):
                 # ma non facciamo crashare il server sensori
                 print(f"Attenzione: Impossibile salvare il log. Errore: {e}")
                 self.logger_url_valid = False
-                threading.Thread(target=self._try_get_logger_url, args = ("LoggerWebServer", self._on_logger_url), daemon=True).start()
+                
+                # Corretto il parametro arg mancante che causava potenziale crash
+                threading.Thread(target=self._try_get_logger_url, daemon=True).start()
         else:
             print(f"Attenzione: Impossibile salvare il log. Non è stato possibile ottenere l'url del logger.")
+
+        # =========================================================
+        # Spara i dati anche su MQTT per il Controller
+        # =========================================================
+        self.mqtt_bridge.publish_telemetry(senml_document)
 
         return json.dumps(senml_document).encode('utf-8')
