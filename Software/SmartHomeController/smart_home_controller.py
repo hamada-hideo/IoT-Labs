@@ -39,6 +39,11 @@ class SmartHomeController:
         self.LLT1, self.HLT1, self.LFT1, self.HFT1 = p_t["LLT"], p_t["HLT"], p_t["LFT"], p_t["HFT"]
         self.LLT2, self.HLT2, self.LFT2, self.HFT2 = e_t["LLT"], e_t["HLT"], e_t["LFT"], e_t["HFT"]
 
+        act_cmds = self.config.get("actuator_commands", {})
+        self.cmd_lights = act_cmds.get("lights", {"off": 0, "on": 1})
+        self.cmd_therm = act_cmds.get("thermostat", {"off": 0, "heating": 1, "cooling": 2})
+        self.cmd_blinds = act_cmds.get("blinds", {"closed": 0, "open": 100})
+
         self.lcd_data = {}
         self.lcd_screen_index = 0
 
@@ -98,7 +103,6 @@ class SmartHomeController:
                 if not self.home_topology or not self.lcd_data: continue
                     
                 for room, data in list(self.lcd_data.items()):
-                    # IL FIX: Non controlliamo più is_online. Se abbiamo i dati, aggiorniamo l'LCD!
                     idx = self.lcd_screen_index
                     if idx == 0:
                         text = f"Temperature:|{int(data['temp'])}"
@@ -177,9 +181,7 @@ class SmartHomeController:
                                 if act_info["type"] == "green_lights":
                                     self.send_command(room, act_id, act_info, True, override_id=f"{act_id}_toggle")
 
-            # --- MOTORE DI VALUTAZIONE REGOLE ---
             for room in rooms_to_process:
-                # IL FIX: Rimossa la condizione is_online. Se riceviamo telemetria, la elaboriamo sempre!
                 if room not in self.temp_windows or len(self.temp_windows[room]) == 0:
                     continue
 
@@ -221,28 +223,29 @@ class SmartHomeController:
         }
 
     def apply_virtual_logic(self, room, temperature, presence):
-        self._dispatch_by_type(room, "lights", presence)
+        light_val = self.cmd_lights["on"] if presence else self.cmd_lights["off"]
+        self._dispatch_by_type(room, "lights", light_val)
 
         if presence:
             if temperature > self.target_temp:
-                self._dispatch_by_type(room, "thermostat", "COOLING")
-                self._dispatch_by_type(room, "blinds", "CLOSE")
+                self._dispatch_by_type(room, "thermostat", self.cmd_therm["cooling"]) 
+                self._dispatch_by_type(room, "blinds", self.cmd_blinds["closed"])     
             elif temperature < (self.target_temp - 2.0):
-                self._dispatch_by_type(room, "thermostat", "HEATING")
-                self._dispatch_by_type(room, "blinds", "OPEN")
+                self._dispatch_by_type(room, "thermostat", self.cmd_therm["heating"]) 
+                self._dispatch_by_type(room, "blinds", self.cmd_blinds["open"])   
             else:
-                self._dispatch_by_type(room, "thermostat", "OFF")
-                self._dispatch_by_type(room, "blinds", "OPEN")
+                self._dispatch_by_type(room, "thermostat", self.cmd_therm["off"]) 
+                self._dispatch_by_type(room, "blinds", self.cmd_blinds["open"])   
         else:
             if temperature > (self.target_temp + 5.0):
-                self._dispatch_by_type(room, "thermostat", "COOLING")
-                self._dispatch_by_type(room, "blinds", "CLOSE")
+                self._dispatch_by_type(room, "thermostat", self.cmd_therm["cooling"]) 
+                self._dispatch_by_type(room, "blinds", self.cmd_blinds["closed"])     
             elif temperature < 15.0:
-                self._dispatch_by_type(room, "thermostat", "HEATING")
-                self._dispatch_by_type(room, "blinds", "OPEN")
+                self._dispatch_by_type(room, "thermostat", self.cmd_therm["heating"]) 
+                self._dispatch_by_type(room, "blinds", self.cmd_blinds["open"])   
             else:
-                self._dispatch_by_type(room, "thermostat", "OFF")
-                self._dispatch_by_type(room, "blinds", "CLOSE")
+                self._dispatch_by_type(room, "thermostat", self.cmd_therm["off"]) 
+                self._dispatch_by_type(room, "blinds", self.cmd_blinds["closed"])     
 
     def start(self):
         self._get_broker_loop()
