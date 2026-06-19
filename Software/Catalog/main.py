@@ -23,15 +23,15 @@ if __name__ == '__main__':
         }
     }
     
-    # 1. Creiamo l'istanza unica del Catalogo
+    # 1. Creation of catalog instance
     catalog_instance = Catalog()
     
-    # 2. Montiamo il catalogo su CherryPy
+    # 2. Catalog on Cherrypy
     cherrypy.tree.mount(catalog_instance, f'/{endpoint}', conf)
     cherrypy.config.update({'server.socket_host': '::'})
     cherrypy.config.update({'server.socket_port': port})
     
-    # 4. Avviamo CherryPy
+    # 4. starting CherryPy
     print("Start of IoT Catalog on 8080 with MQTT integration...")
     cherrypy.engine.start()
     cherrypy.engine.block()
