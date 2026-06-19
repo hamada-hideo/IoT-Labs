@@ -20,7 +20,6 @@ class DeviceMQTTClient():
         Constructor method. Initializes client naming scopes, builds the entry
         payload, and spawns the background periodic registration lifecycle thread.
         """
-        self.config_file = os.path.join(DIR, "network_config.json")
 
         self.client_id = "DeviceMQTTClient"
 

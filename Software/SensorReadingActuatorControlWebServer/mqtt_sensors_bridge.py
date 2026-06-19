@@ -33,7 +33,7 @@ class MQTTSensorsBridge:
         self.client.on_connect = self.on_connect
 
         # Legge il topic dal file di configurazione di rete (come fa l'actuators bridge)
-        self.config_file = os.path.join(DIR, "network_config.json")
+        self.config_file = os.path.join(DIR, "config.json")
         self.pub_topic = "/tiot/group12/sensors/telemetry" # Fallback sicuro di default
         
         if os.path.exists(self.config_file):

@@ -31,11 +31,11 @@ class Catalog(object):
 
     def __init__(self):
         """
-        Constructor method. Loads the network configuration, initializes the in-memory 
+        Constructor method. Loads the configuration, initializes the in-memory 
         catalog structure, recovers persisted data, and starts background threads.
         """
-        # Load core settings (expiration time, MQTT broker details) from network config file
-        self.config_file = os.path.join(DIR, "network_config.json")
+        # Load core settings (expiration time, MQTT broker details) from config file
+        self.config_file = os.path.join(DIR, "config.json")
         with open(self.config_file, "r") as f:
             data = json.load(f)
             
@@ -81,7 +81,7 @@ class Catalog(object):
                         self.catalog['devices'] = {}
                     if 'services' not in self.catalog:
                         self.catalog['services'] = {}
-                    # Synchronize the broker URL with the latest network configuration
+                    # Synchronize the broker URL with the latest configuration
                     self.catalog['broker'] = self.broker
                     
                 except json.JSONDecodeError:

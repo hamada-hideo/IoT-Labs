@@ -11,7 +11,7 @@ from SensorReadingActuatorControlWebServer.sensor_reading_webserver import Senso
 from SensorReadingActuatorControlWebServer.actuator_control_webserver import ActuatorControlWebServer
 
 if __name__ == '__main__':
-    with open(os.path.join(DIR, "network_config.json")) as f:
+    with open(os.path.join(DIR, "config.json")) as f:
         data = json.load(f)
     ip = data["ip"]
     port = data["port"]

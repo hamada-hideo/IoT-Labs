@@ -11,14 +11,14 @@ import os
 DIR = os.path.dirname(os.path.abspath(__file__))
 
 # --- Section 2: Class Initialization and Configuration Loading ---
-# The constructor loads connection parameters (IP, Port, Endpoint) from 'network_config.json'.
+# The constructor loads connection parameters (IP, Port, Endpoint) from 'config.json'.
 # It also calculates the 'loop_time' for registration refreshes, which must be 
 # frequent enough to prevent the Catalog from purging the entry (every 60s)
 
 class CatalogClient:  
     
     def __init__(self):
-        self.config_file = os.path.join(DIR, "network_config.json")
+        self.config_file = os.path.join(DIR, "config.json")
         with open(self.config_file, "r") as f:
             data = json.load(f)
         self.catalog_ip = data["rest"]["ip"]

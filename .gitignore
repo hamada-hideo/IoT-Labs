@@ -12,4 +12,3 @@ __pycache__/
 Software/Catalog/catalog.json
 Software/SensorReadingActuatorControlWebServer/actuators_state.json
 Software/LoggerWebServer/logs.json
-network_config.json

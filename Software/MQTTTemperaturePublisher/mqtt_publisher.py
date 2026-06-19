@@ -29,7 +29,7 @@ class TemperaturePublisher():
         Constructor method. Configures local parameters, connects to the distributed 
         broker platform, builds profiles, and boots concurrent task routines.
         """
-        self.config_file = os.path.join(DIR, "network_config.json")
+        self.config_file = os.path.join(DIR, "config.json")
         with open(self.config_file, "r") as f:
             data = json.load(f)
 

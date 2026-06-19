@@ -16,7 +16,7 @@ import paho.mqtt.client as mqtt
 from catalog_service import Catalog
 
 DIR = os.path.dirname(os.path.abspath(__file__))
-# SECTION 2: CLASS INITIALIZATION AND NETWORK CONFIGURATION
+# SECTION 2: CLASS INITIALIZATION AND CONFIGURATION
 class MQTTCatalogBridge:
     def __init__(self, catalog_instance):
         """
@@ -30,8 +30,8 @@ class MQTTCatalogBridge:
         self.client = mqtt.Client()
         self.client.on_connect = self.on_connect
         self.client.on_message = self.on_message
-        # Load dynamic communication topics from network config file to prevent hardcoded paths
-        self.config_file = os.path.join(DIR, "network_config.json")
+        # Load dynamic communication topics from config file to prevent hardcoded paths
+        self.config_file = os.path.join(DIR, "config.json")
         with open(self.config_file, "r") as f:
             data = json.load(f)
         

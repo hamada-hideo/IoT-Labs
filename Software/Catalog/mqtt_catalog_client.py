@@ -22,7 +22,7 @@ class MQTTCatalogClient:
         Constructor method. Initializes target subscription and routing topics,
         configures a unique MQTT Client ID to avoid broker collisions, and sets up sync structures.
         """
-        self.config_file = os.path.join(DIR, "network_config.json")
+        self.config_file = os.path.join(DIR, "config.json")
         with open(self.config_file, "r") as f:
             data = json.load(f)
         self.broker_ip = data["mqtt"]["broker"]["ip"]
