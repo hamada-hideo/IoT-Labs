@@ -121,6 +121,9 @@ void setup() {
     JsonObject mqtt_info = doc_reg.createNestedObject("mqtt");
     mqtt_info["command_topic"] = BASE_TOPIC + String(actuators[i][0]) + "/config";
     mqtt_info["feedback_topic"] = BASE_TOPIC + String(actuators[i][0]) + "/state";
+    if (i != 3) {
+      mqtt_info["logger_topic"] = mqtt_info["command_topic"]; // do not log every lcd screeen change
+    }
 
     String reg_body; serializeJson(doc_reg, reg_body);
     http_client.post(REGISTRATION_URL, "application/json", reg_body);
@@ -230,23 +233,16 @@ void loop() {
     last_publish = millis();
   }
 
-  if (millis() - last_keepalive > 60000) {
+  if (millis() - last_keepalive > 5000) {
     const char* actuators[][3] = {
-      {"heater", "heater", "percent"}, {"green_lights", "green_lights", "bool"},
-      {"fan", "fan", "percent"}, {"lcd", "lcd", "string"}
+      {"heater", "heater", "percent"}, 
+      {"green_lights", "green_lights", "bool"},
+      {"fan", "fan", "percent"}, 
+      {"lcd", "lcd", "string"}
     };
     for(int i = 0; i < 4; i++) {
-      doc_reg.clear();
       String dev_id = NODE_ID + "/" + String(actuators[i][0]);
-      doc_reg["id"] = dev_id; doc_reg["description"] = "Node Component";
-      JsonObject res = doc_reg.createNestedObject("resources");
-      res["type"] = actuators[i][1]; res["unit"] = actuators[i][2];
-      JsonObject mqtt_info = doc_reg.createNestedObject("mqtt");
-      mqtt_info["command_topic"] = BASE_TOPIC + String(actuators[i][0]) + "/config";
-      mqtt_info["feedback_topic"] = BASE_TOPIC + String(actuators[i][0]) + "/state";
-
-      String ka_body; serializeJson(doc_reg, ka_body);
-      http_client.put(REGISTRATION_URL, "application/json", ka_body);
+      http_client.put(REGISTRATION_URL + "/" + dev_id, "application/json", "{}");
       http_client.responseStatusCode(); http_client.responseBody(); 
       http_client.stop(); 
       delay(150); 

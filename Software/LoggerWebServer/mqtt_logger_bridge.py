@@ -29,10 +29,8 @@ class MQTTLoggerBridge:
             devices = self.catalog.get_devices()
             topics = set()
             for id in devices:
-                if "mqtt" in devices[id] and "command_topic" in devices[id]["mqtt"]:
-                    topics.add(devices[id]["mqtt"]["command_topic"])
-                if "mqtt" in devices[id] and "pub_topic" in devices[id]["mqtt"]:
-                    topics.add(devices[id]["mqtt"]["pub_topic"])
+                if "mqtt" in devices[id] and "logger_topic" in devices[id]["mqtt"]:
+                    topics.add(devices[id]["mqtt"]["logger_topic"])
             diff = topics.difference(self.subscribed_topics)
             if diff:
                 self.client.subscribe([(topic, 2) for topic in diff])

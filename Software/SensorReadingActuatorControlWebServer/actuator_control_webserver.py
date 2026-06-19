@@ -131,6 +131,7 @@ class ActuatorControlWebServer:
         res = []
         for room in self.state:
             for actuator in self.state[room]:
+                command_topic = f"/tiot/group12/smart_home/{room}/{actuator}/config"
                 res.append({
                     "device": {
                         "id": f"{room}/{actuator}",
@@ -142,8 +143,9 @@ class ActuatorControlWebServer:
                             "max": self.rules[self.state[room][actuator]["type"]]["high"]
                         },
                         "mqtt": {
-                            "command_topic": f"/tiot/group12/smart_home/{room}/{actuator}/config",
-                            "feedback_topic": f"/tiot/group12/smart_home/{room}/{actuator}/state"
+                            "command_topic": command_topic,
+                            "feedback_topic": f"/tiot/group12/smart_home/{room}/{actuator}/state",
+                            "logger_topic": command_topic
                         },
                         "rest": {
                             "url": f"http://{self.ip}:{self.port}/{self.endpoint}/{room}/{actuator}"

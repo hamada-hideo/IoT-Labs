@@ -11,6 +11,8 @@ This MQTT Actuator Command Pubnlisher must register itself on the Catalog via RE
 and keep the registration periodically updated (see Exercise 05)
 '''
 
+# TODO: Da adattare per comprendere i tipi di attuatore dell'arduino o da sistemare in modo che non si rompa
+
 import paho.mqtt.client as mqtt
 import json
 import time

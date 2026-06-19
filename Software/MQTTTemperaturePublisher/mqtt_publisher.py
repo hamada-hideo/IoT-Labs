@@ -96,7 +96,8 @@ class TemperaturePublisher():
         "description": "MQTT Temperature Sensor",
         "mqtt": {
             "sub_topic": self.command_topic,
-            "pub_topic": self.publish_topic
+            "pub_topic": self.publish_topic,
+            "logger_topic": self.publish_topic
         },
         "resources": {
             "type": "temperature",
