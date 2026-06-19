@@ -1,3 +1,11 @@
+# EXERCISE: Exercise 09 - MQTT Temperature Publisher
+# ACTOR: TemperaturePublisher (Virtual IoT Environmental Sensor)
+# DESCRIPTION: Emulates a physical smart home temperature node. It retrieves broker
+#              endpoints dynamically, auto-registers with the Catalog, publishes
+#              simulated measurements in SenML format, and processes down-link
+#              runtime reconfiguration commands.
+
+# SECTION 1: SYSTEM ENVIRONMENT & RESOURCE LIBRARIES
 import paho.mqtt.client as mqtt
 import json
 import time
@@ -14,8 +22,13 @@ import SenMLUtils as SenML
 
 DIR = os.path.dirname(os.path.abspath(__file__))
 
+# SECTION 2: CLASS INITIALIZATION & CONTEXT LIFECYCLE
 class TemperaturePublisher():
     def __init__(self):
+        """
+        Constructor method. Configures local parameters, connects to the distributed 
+        broker platform, builds profiles, and boots concurrent task routines.
+        """
         self.config_file = os.path.join(DIR, "network_config.json")
         with open(self.config_file, "r") as f:
             data = json.load(f)
@@ -43,8 +56,12 @@ class TemperaturePublisher():
 
         self.pub_thread = threading.Thread(target=self._publish_loop, daemon=True)
         self.pub_thread.start()
-
+    # SECTION 3: AUTOMATED CLOUD REGISTRATION MAINTENANCE LOOPS
     def _try_register_refresh_loop(self):
+        """
+        Asynchronous infinite registration maintenance loop. Alternates between 
+        initial POST device insertions and periodic keep-alive updates.
+        """
         while True:
             time.sleep(self.catalog.loop_time)
             if not self.registered:
@@ -59,6 +76,10 @@ class TemperaturePublisher():
                     print(f"[{time.strftime('%X')}] Registration refreshed for {self.client_id}")
 
     def _get_broker_loop(self):
+        """
+        Blocks context evaluation pipelines until valid core broker network attributes
+        are safely resolved by querying the systems central Catalog.
+        """
         while True:
             time.sleep(self.catalog.loop_time)
             broker = self.catalog.get_broker()
@@ -66,8 +87,9 @@ class TemperaturePublisher():
                 self.broker_host = broker["ip"]
                 self.broker_port = broker["port"]
                 break
-
+    # SECTION 4: ASYNCHRONOUS PACKET INTERCEPT HOOKS
     def on_connect(self,client,userdata,flags,rc):
+        """Asynchronous callback triggered when connection verification tokens arrive from the broker."""
         if rc == 0:
             print("Connected successfully")
         else:
@@ -77,6 +99,7 @@ class TemperaturePublisher():
         print(f"Subscribed to {self.command_topic}")
 
     def on_message(self,client,userdata,msg):
+        """Asynchronous down-link engine listener. Parses remote reconfiguration payloads."""
         payload = msg.payload.decode("utf-8")
         try:
             data = json.loads(payload)
@@ -89,8 +112,9 @@ class TemperaturePublisher():
             print(f"Publish interval updated to {self.publish_interval} seconds")
         else:
             print(f"Unknown command received: {data}")
-
+    # SECTION 5: SENML UTILITIES & SERIALIZATION TRANSLATORS
     def _build_registration_payload(self):
+        """Internal helper to structure the device profile metadata catalog schema layout."""
         return {
         "id": self.client_id,
         "description": "MQTT Temperature Sensor",
@@ -106,6 +130,7 @@ class TemperaturePublisher():
     }
 
     def _build_senml(self,temperature):
+        """Wraps float measurements into standard, single-event arrays using compliant SenML schemas."""
         return json.dumps(
             SenML.build_array_dict([
                 SenML.build_event_dict(
@@ -116,8 +141,12 @@ class TemperaturePublisher():
                 )
             ])
         )
-
+    # SECTION 6: SIMULATION LOOPS & DATA RUN TIME MANAGEMENT
     def _publish_loop(self):
+        """
+        Infinite simulation runner loop. Periodically packages environmental mock readings 
+        and publishes them to the assigned downstream channels.
+        """
         while self.running:
             temperature = round(random.uniform(20.0, 30.0),2)
             payload = self._build_senml(temperature)
@@ -128,6 +157,7 @@ class TemperaturePublisher():
             time.sleep(self.publish_interval)
 
     def run(self):
+        """Main interface driver. Activates non-blocking background network threads and monitors exit traps."""
         self.client.loop_start()
         print(f"[{time.strftime('%X')}] Temperature publisher started")
 
