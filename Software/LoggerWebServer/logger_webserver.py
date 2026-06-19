@@ -1,3 +1,11 @@
+# EXERCISE: Exercise 06 / Extension - Smart Home Service Registration
+# ACTOR: LoggerWebServer (Central Data Logging Service)
+# DESCRIPTION: Acts as a central logging service that intercepts smart home events
+#              (sensor readings and actuator commands) formatted in SenML. It exposes
+#              a REST API for structured log queries/deletions and embeds an MQTT
+#              bridge to append real-time telemetry to database storage.
+
+# SECTION 1: SYSTEM DEPENDENCIES & DYNAMIC PATH RESOLUTION
 import cherrypy
 import json
 import time
@@ -13,11 +21,15 @@ from Catalog.catalog_client import CatalogClient
 from LoggerWebServer.mqtt_logger_bridge import MQTTLoggerBridge
 
 DIR = os.path.dirname(os.path.abspath(__file__))
-
+# SECTION 2: CLASS INITIALIZATION & COMPONENT INTEGRATION
 class LoggerWebServer():
     exposed = True
 
     def __init__(self, ip, port, endpoint):
+        """
+        Constructor method. Initializes the local JSON log storage array, mounts 
+        concurrency locks, initiates the MQTT bridge thread, and triggers the Catalog loop.
+        """
         self.log_file = os.path.join(DIR, "logs.json")
         if os.path.exists(self.log_file):
             with open(self.log_file, "r") as f:
@@ -52,8 +64,11 @@ class LoggerWebServer():
         self.registered = False
 
         threading.Thread(target=self._try_register_refresh_loop, args = (self.data, self.id), daemon=True).start()
-
+    # SECTION 3: CORE DATA PERSISTENCE & AUTO-REGISTRATION SUBROUTINES
     def _dump(self):
+        """
+        Internal private helper to commit current logs and tracking counters to disk.
+        """
         with open(self.log_file, "w") as f:
             json.dump({
                 "logs": self.logs,
@@ -61,6 +76,9 @@ class LoggerWebServer():
             }, f, indent=4)
 
     def _try_register_refresh_loop(self, payload, id):
+        """
+        Asynchronous infinite loop maintaining registration flags inside the central Catalog server.
+        """
         while True:
             time.sleep(self.cc.loop_time)
             if not self.registered:
@@ -69,20 +87,25 @@ class LoggerWebServer():
             else:
                 if not self.cc.refresh_service(id):
                     self.registered = False
-
+    # SECTION 4: DATA PROCESSING & SENML PARSING EXTENSIONS
     def _get_room_name(self, senml_name):
+        """Extracts the room localization tag from standard SenML name pathways."""
         segments = senml_name.strip().split("/")
         if len(segments) < 2:
             raise cherrypy.HTTPError(400, "Wrong SenML name")
         return segments[1]
     
     def _get_type(self, senml_name):
+        """Extracts the resource hardware type token from standard SenML name pathways."""
         segments = senml_name.strip().split("/")
         if len(segments) < 3:
             raise cherrypy.HTTPError(400, "Wrong SenML name")
         return segments[2]
 
     def _get_logs_by_room_and_time(self, room = None, since = None, before = None):
+        """
+        Thread-safe analytical engine to filter records based on spatial coordinates or time vectors.
+        """
         res = []
         with self.lock:
             for log in self.logs:
@@ -97,6 +120,9 @@ class LoggerWebServer():
         return res
     
     def _process_SenML(self, senml):
+        """
+        Unpacks incoming multi-event SenML payloads, stamps execution IDs, and stores them.
+        """
         flat_events = SenML.flatten_senml(senml)
         ids = []
         with self.lock:
@@ -106,6 +132,7 @@ class LoggerWebServer():
         return ids
 
     def _insert_new_log(self, j):
+        """Appends contextual arrival epoch variables and database tracking codes onto the dictionary."""
         id = self.id_counter
         self.id_counter += 1
         j["epoch"] = time.time()
@@ -114,6 +141,9 @@ class LoggerWebServer():
         return id
     
     def _delete_logs_by_time(self, before):
+        """
+        Purges expired telemetry logs residing past a specific timestamp boundary.
+        """
         res = []
         deleted = []
         with self.lock:
@@ -125,8 +155,12 @@ class LoggerWebServer():
             self.logs = res
             self._dump()
         return deleted
-
+    # SECTION 5: HTTP REST ENDPOINTS (CRUD OPERATIONS)
     def GET(self, *path, **query):
+        """
+        Handles HTTP GET requests. Supports dynamic retrieval filtering via explicit paths 
+        or optional query attributes ('room', 'since', 'before').
+        """
         room = None
         since = None
         before = None
@@ -157,6 +191,10 @@ class LoggerWebServer():
         return json.dumps(self._get_logs_by_room_and_time(room, since, before)).encode("utf-8")
 
     def POST(self, *path, **query):
+        """
+        Handles HTTP POST requests. Intercepts external metrics, validates SenML format,
+        and pipes strings directly into the primary internal data processing stacks.
+        """
         if len(path) > 0:
             raise cherrypy.HTTPError(404, "URI too specific")
         if len(query) > 0:
@@ -182,6 +220,10 @@ class LoggerWebServer():
         }).encode("utf-8")
 
     def DELETE(self, *path, **query):
+        """
+        Handles HTTP DELETE requests. Executes administrative log cleanup operations
+        by wiping out entries recorded before a specified timestamp parameter.
+        """
         if len(path) > 0:
             raise cherrypy.HTTPError(404, "URI too specific")
         for key in query.keys():
