@@ -1,0 +1,2 @@
+mosquitto_pub -t "/tiot/group12/led" -h "broker.emqx.io" -m "{\"e\": [{\"n\":\"led\", \"v\":1, \"u\":\"bool\", \"t\":0}]}"
+mosquitto_pub -t "/tiot/group12/led" -h "broker.emqx.io" -m "{\"e\": [{\"n\":\"led\", \"v\":0, \"u\":\"bool\", \"t\":0}]}"
