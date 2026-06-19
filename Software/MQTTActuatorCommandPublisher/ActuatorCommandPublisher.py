@@ -1,18 +1,10 @@
-'''
-Develop an MQTT publisher that sends actuation commands to the smart home
-actuators (thermostat, lights, blinds) from Exercise 03 and to switch on and off a led
-managed the Arduino (refer to Exercise 3.3 Lab Hardware - part 3 for topics and
-data format). On startup, this MQTT Actuator Command Publisher queries the Catalog
-to discover registered devices and their MQTT command topics. Commands are sent as
-JSON (to be defined by your team). The MQTT Actuator Command Publisher also
-subscribes to a state-feedback topic to confirm that commands were applied. Implement
-an interactive command-line interface for manual control.
-This MQTT Actuator Command Pubnlisher must register itself on the Catalog via REST
-and keep the registration periodically updated (see Exercise 05)
-'''
+# EXERCISE: Exercise 06 / Exercise 09 Extension - Actuator Interactivity
+# ACTOR: ActuatorCommandPublisher (Interactive Remote Actuator Controller)
+# DESCRIPTION: Discovers online actuators via the Catalog service, maps data parsing
+#              rules from local assets, subscribes dynamically to target feedback channels,
+#              and publishes user-driven action commands wrapped in SenML format.
 
-# TODO: Da adattare per comprendere i tipi di attuatore dell'arduino o da sistemare in modo che non si rompa
-
+# SECTION 1: SYSTEM ENVIRONMENT & EXTENSION MODULES
 import paho.mqtt.client as mqtt
 import json
 import time
@@ -24,8 +16,13 @@ from Catalog.catalog_client import *
 
 DIR = os.path.dirname(os.path.abspath(__file__))
 
+# SECTION 2: CLASS INITIALIZATION & ENVIRONMENT SETUP
 class ActuatorCommandPublisher():
     def __init__(self):
+        """
+        Constructor method. Loads structural validation schema configurations, builds
+        the catalog database client connection, and launches local keep-alive registration loops.
+        """
         self.actuators_config_file = os.path.join(DIR, "actuators_config.json")
         with open(self.actuators_config_file, "r") as f:
             self.rules = json.load(f)
@@ -57,8 +54,12 @@ class ActuatorCommandPublisher():
         threading.Thread(target=self._try_register_refresh_loop, daemon=True).start()
 
         self.running = True
-
+    # SECTION 3: TOPIC REFRESH & DATABASE SYNCHRONIZATION RUNNERS
     def _get_refresh_devices_topics(self):
+        """
+        Infinite background operational loop. Pulls device maps from the Catalog,
+        extracts control endpoints, and dynamically mirrors active feedback topic subscriptions.
+        """
         while True:
             devices = self.catalog.get_devices()
             command_topics = {}
@@ -82,6 +83,10 @@ class ActuatorCommandPublisher():
             time.sleep(self.catalog.loop_time)
 
     def _try_register_refresh_loop(self):
+        """
+        Asynchronous infinite service registration maintenance pipeline.
+        Manages initial POST insertion handshakes and cyclic keep-alive heartbeats.
+        """
         while True:
             time.sleep(self.catalog.loop_time)
             if not self.registered:
@@ -96,6 +101,10 @@ class ActuatorCommandPublisher():
                     print(f"[{time.strftime('%X')}] Registration refreshed for {self.client_id}")
 
     def _get_broker_loop(self):
+        """
+        Blocks initialization sequences until valid broker linkage parameters 
+        are fetched from the Catalog architecture endpoints.
+        """
         while True:
             time.sleep(self.catalog.loop_time)
             broker = self.catalog.get_broker()
@@ -103,8 +112,9 @@ class ActuatorCommandPublisher():
                 self.broker_host = broker["ip"]
                 self.broker_port = broker["port"]
                 break
-
+    # SECTION 4: ASYNCHRONOUS PACKET INTERCEPT HOOKS
     def on_connect(self,client, userdata,flags,rc):
+        """Asynchronous callback triggered when the server receives a broker acknowledgment token."""
         if rc == 0:
             print("Connected successfully.")
             threading.Thread(target=self._get_refresh_devices_topics, daemon=True).start()
@@ -113,6 +123,7 @@ class ActuatorCommandPublisher():
             return
 
     def on_message(self,client,userdata,msg):
+        """Asynchronous hook triggered when incoming telemetry packets land on subscribed feedback topics."""
         topic = msg.topic
         payload = msg.payload.decode("utf-8")
         try:
@@ -121,19 +132,22 @@ class ActuatorCommandPublisher():
             print(f"Malformed feedback received on {topic}")
             return
         print(f"FEEDBACK received on {msg.topic}: {data}")
-
+    # SECTION 5: PAYLOAD BUILDERS & PROGRAMMATIC OUTPUT TRANSMITTERS
     def _build_registration_payload(self):
+        """Internal configuration helper to organize the service metadata map profile."""
         return{
             "id" : self.client_id,
             "description" : "MQTT Actuator Command Publisher"
         }
 
     def _send_command(self, topic, payload):
+        """Formats target message structures and publishes packets across downstream channels."""
         message = json.dumps(payload)
         self.client.publish(topic,message)
         print(f"[{time.strftime('%X')}] Command sent to {topic}: {payload}")
-
+    #SECTION 6: INTERACTIVE USER TERMINAL EXECUTION PIPELINE
     def run(self):
+        """Main interface driver. Activates non-blocking background loops and prompts user CLI choices."""
         self.client.loop_start()
         print(f"[{time.strftime('%X')}] Actuator Command Publisher started")
         while self.running:
