@@ -1,3 +1,11 @@
+# EXERCISE: Exercise 06 / Exercise 09 Extension - Actuator REST Controller
+# ACTOR: ActuatorControlWebServer (Central Actuator Orchestrator)
+# DESCRIPTION: Manages the internal execution states of smart home actuators.
+#              Exposes a hierarchical REST API, interfaces with an internal MQTT
+#              bridge framework, and forwards processed operation footprints 
+#              downstream to the LoggerWebServer using synchronous HTTP requests.
+
+# SECTION 1: SYSTEM ENVIRONMENT & CROSS-PACKAGE IMPORT LOGIC
 import cherrypy
 import json
 import time
@@ -15,10 +23,15 @@ from SensorReadingActuatorControlWebServer.mqtt_actuators_bridge import *
 
 DIR = os.path.dirname(os.path.abspath(__file__))
 
+# SECTION 2: CLASS INITIALIZATION & SUBSYSTEM COUPLING
 class ActuatorControlWebServer:
     exposed = True
     
     def __init__(self, ip, port, endpoint):
+        """
+        Constructor method. Validates internal rule configuration sets, generates
+        sub-resource representations, initializes the MQTT bridge, and binds Catalog routines.
+        """
         self.config_file = os.path.join(DIR, "actuators_config.json")
         self.state_file = os.path.join(DIR, "actuators_state.json")
         self._load_data()
@@ -52,8 +65,12 @@ class ActuatorControlWebServer:
 
         self.mqtt_bridge = MQTTActuatorsControlBridge(self)
         threading.Thread(target=self.mqtt_bridge.run, daemon=True).start()
-
+    # SECTION 3: SYSTEM VALIDATION & FILE SYSTEM PERSISTENCE METHODS
     def _load_data(self):
+        """
+        Internal private helper. Parses validation configuration parameters and synchronizes 
+        the active operational state matrix with stored JSON file system values.
+        """
         with open(self.config_file, "r") as f:
             data = json.load(f)
             self.rules = data["rules"]
@@ -75,6 +92,10 @@ class ActuatorControlWebServer:
                 json.dump(self.state, f, indent=4)
 
     def _validate_state(self, reference):
+        """
+        Ensures the local database architecture accurately mimics configured boundaries
+        by verifying metric ranges, properties, units, and structural integrity.
+        """
         for room in self.state:
             if room not in reference:
                 return False
@@ -99,8 +120,12 @@ class ActuatorControlWebServer:
                 if self.rules[self.state[room][device]["type"]]["high"] is not None and self.state[room][device]["v"] > self.rules[self.state[room][device]["type"]]["high"]:
                     return False
         return True
-
+    # SECTION 4: BACKGROUND DISCOVERY & RESOURCE GENERATION ROUTINES
     def _try_register_refresh_loop(self):
+        """
+        Maintains registration states inside the central Catalog database for both
+        the main controller service and each standalone physical actuator endpoint.
+        """
         while True:
             time.sleep(self.cc.loop_time)
             if not self.registered:
@@ -118,6 +143,10 @@ class ActuatorControlWebServer:
                         self.devices_list[i]["registered"] = False
 
     def _try_get_logger_url(self):
+        """
+        Polls the Catalog registry endpoint until the core central historical database service
+        is successfully identified, resolving its target connectivity URL dynamically.
+        """
         while True:
             time.sleep(self.cc.loop_time)
             res = self.cc.get_service(self.logger_id)
@@ -128,6 +157,10 @@ class ActuatorControlWebServer:
                 break
 
     def _build_devices_list(self):
+        """
+        Iterates over state maps to build and populate comprehensive individual 
+        profiles for every active physical actuator, registering communication channels.
+        """
         res = []
         for room in self.state:
             for actuator in self.state[room]:
@@ -156,12 +189,14 @@ class ActuatorControlWebServer:
         return res
     
     def _build_resource_list(self):
+        """Builds a condensed structure mapping rooms to their respective hardware tokens."""
         res = dict()
         for room in self.state:
             res[room] = [a for a in self.state[room]]
         return res
-
+    # SECTION 5: DOMAIN SPECIFIC INTERNAL ACTUATION LOGIC
     def _get_room_id_device_id(self, senml_name):
+        """Extracts spatial context configurations by evaluating SenML name tokens."""
         segments = senml_name.strip().split("/")
         if len(segments) != 3 or segments[0] != "smart_home" or segments[1] not in self.state or segments[2] not in self.state[segments[1]]:
             raise cherrypy.HTTPError(422, "Wrong event name")
@@ -169,6 +204,7 @@ class ActuatorControlWebServer:
         return room_id, device_id
 
     def _validate_for_device(self, record):
+        """Checks incoming event metrics against physical unit definitions and boundary rules."""
         room_id, device_id = self._get_room_id_device_id(record[SenML.NAME_KEY])
         device_type = self.state[room_id][device_id]["type"]
 
@@ -185,6 +221,7 @@ class ActuatorControlWebServer:
         return True
 
     def _get_all(self):
+        """Thread-safe state converter. Bundles full memory arrays into formal global SenML outputs."""
         with self.lock:
             return SenML.build_array_dict(
                 [SenML.build_event_dict(
@@ -197,6 +234,7 @@ class ActuatorControlWebServer:
             )
 
     def _get_by_room(self, room_id):
+        """Thread-safe state converter. Isolates individual room entries into localized SenML blocks."""
         with self.lock:
             room = self.state[room_id]
             return SenML.build_array_dict(
@@ -210,6 +248,7 @@ class ActuatorControlWebServer:
             )
 
     def _get_by_room_and_device(self, room_id, device_id):
+        """Thread-safe data retrieval engine for a single, target hardware asset component."""
         with self.lock:
             room = self.state[room_id]
             device = room[device_id]
@@ -223,6 +262,7 @@ class ActuatorControlWebServer:
             )
 
     def _actuate(self, command):
+        """Modifies volatile memory states and saves changes to disk."""
         room_id, device_id = self._get_room_id_device_id(command[SenML.NAME_KEY])
         self.state[room_id][device_id]["v"] = command[SenML.VALUE_KEY]
         self.state[room_id][device_id]["t"] = time.time()
@@ -230,6 +270,7 @@ class ActuatorControlWebServer:
             json.dump(self.state, f, indent=4)
 
     def _process_SenML(self, senml, room = None, id = None):
+        """Flattens input payloads, validates each entry, and executes actuation commands."""
         flat_events = SenML.flatten_senml(senml)
         
         cnt = 0
@@ -244,8 +285,12 @@ class ActuatorControlWebServer:
             cnt += 1
         
         return cnt
-        
+        # SECTION 6: HTTP REST ENDPOINTS (GET & POST CAPABILITIES)
     def GET(self, *uri, **params):
+        """
+        Handles HTTP GET requests. Parses routing levels dynamically to output global telemetry,
+        room arrays, or single device snapshots.
+        """
         if len(params) > 0:
             raise cherrypy.HTTPError(400, f"Unknown parameters: {[k for k in params.keys()]}")
         
@@ -271,6 +316,10 @@ class ActuatorControlWebServer:
 
 
     def POST(self,*uri,**params):
+        """
+        Handles HTTP POST requests. Decodes validation commands, updates states, 
+        and sends synchronous HTTP data logs downstream to the central Logger microservice.
+        """
         if len(uri) > 0:
             raise cherrypy.HTTPError(404, "URI too specific")
         if len(params) > 0:
