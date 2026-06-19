@@ -1,4 +1,4 @@
-EXERCISE 7
+# EXERCISE 7
 
 # --- Section 1: Library Imports and Path Configuration ---
 # Standard libraries for web services (cherrypy), data (json), and concurrency (threading).
@@ -155,7 +155,7 @@ class Catalog(object):
     @cherrypy.tools.json_out()
     def POST(self, *path, **params):
 
-"""
+        """
         Handles HTTP POST requests. Registers a brand new device/service or updates 
         an entire payload entry based on the identifier provided within the JSON payload.
         """

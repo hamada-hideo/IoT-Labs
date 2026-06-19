@@ -46,9 +46,6 @@ class LoggerWebServer():
             "description": "Service that logs commands sent to actuators and data received from sensors in the smart home",
             "rest": {
                 "url": f"http://{self.ip}:{self.port}/{self.endpoint}"
-            },
-            "mqtt": {
-                "sub_topic": self.mqtt_bridge.topic
             }
         }
 

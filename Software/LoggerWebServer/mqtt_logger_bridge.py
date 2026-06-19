@@ -12,9 +12,7 @@ class MQTTLoggerBridge:
     def __init__(self, logger_instance):
         self.logger_service = logger_instance
         self.catalog = logger_instance.cc
-        self.config_file = os.path.join(DIR, "network_config.json")
-        with open(self.config_file, "r") as f:
-            self.topic = json.load(f)["mqtt"]["sub_topic"]
+        self.subscribed_topics = set()
         
         self.client = mqtt.Client(
             mqtt.CallbackAPIVersion.VERSION2, 
@@ -25,6 +23,24 @@ class MQTTLoggerBridge:
 
         self.broker_valid = threading.Event()
         threading.Thread(target=self._get_broker_connect_loop, daemon=True).start()
+
+    def _get_refresh_devices_topics(self):
+        while True:
+            devices = self.catalog.get_devices()
+            topics = set()
+            for id in devices:
+                if "mqtt" in devices[id] and "command_topic" in devices[id]["mqtt"]:
+                    topics.add(devices[id]["mqtt"]["command_topic"])
+                if "mqtt" in devices[id] and "pub_topic" in devices[id]["mqtt"]:
+                    topics.add(devices[id]["mqtt"]["pub_topic"])
+            diff = topics.difference(self.subscribed_topics)
+            if diff:
+                self.client.subscribe([(topic, 2) for topic in diff])
+            diff = self.subscribed_topics.difference(topics)
+            if diff:
+                self.client.unsubscribe([topic for topic in diff])
+            self.subscribed_topics = topics
+            time.sleep(self.catalog.loop_time)
 
     def _get_broker_connect_loop(self):
         while True:
@@ -43,7 +59,7 @@ class MQTTLoggerBridge:
     def on_connect(self, client, userdata, flags, reason_code, properties):
         if reason_code == 0:
             print(f"[MQTT Logger] Connesso con successo al Broker su {self.broker_host}:{self.broker_port}!")
-            self.client.subscribe(self.topic)
+            threading.Thread(target=self._get_refresh_devices_topics, daemon=True).start()
         else:
             print(f"[MQTT Logger] Errore di connessione. Codice: {reason_code}")
 

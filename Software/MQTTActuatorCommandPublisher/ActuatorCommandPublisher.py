@@ -104,10 +104,10 @@ class ActuatorCommandPublisher():
     def on_connect(self,client, userdata,flags,rc):
         if rc == 0:
             print("Connected successfully.")
+            threading.Thread(target=self._get_refresh_devices_topics, daemon=True).start()
         else:
             print(f"Connection failed with error code {rc}")
             return
-        threading.Thread(target=self._get_refresh_devices_topics, daemon=True).start()
 
     def on_message(self,client,userdata,msg):
         topic = msg.topic
