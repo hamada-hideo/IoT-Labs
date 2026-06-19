@@ -1,0 +1,11 @@
+{
+    "ip": "127.0.0.1",
+    "port": 8081,
+    "sensors_endpoint": "sensors",
+    "actuators_endpoint": "actuators",
+    "mqtt": {
+        "sub_topic": "/tiot/group12/smart_home/{room}/{id}/config",
+        "pub_topic": "/tiot/group12/smart_home/{room}/{id}/state"
+    },
+    "expiration_time": 10
+}

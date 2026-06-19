@@ -41,8 +41,8 @@ class SmartHomeController:
 
         act_cmds = self.config.get("actuator_commands", {})
         self.cmd_lights = act_cmds.get("lights", {"off": 0, "on": 1})
-        self.cmd_therm = act_cmds.get("thermostat", {"off": 0, "heating": 1, "cooling": 2})
         self.cmd_blinds = act_cmds.get("blinds", {"closed": 0, "open": 100})
+        # Note: Thermostat logic now uses float temperatures (set-points) directly
 
         self.lcd_data = {}
         self.lcd_screen_index = 0
@@ -91,7 +91,7 @@ class SmartHomeController:
                                 self.home_topology[room]["sensors"][dev_name] = {"type": res_type}
                                 
                     if self.home_topology and not hasattr(self, '_topology_printed'):
-                        print(f"\n[CATALOGO] Mappa caricata: {list(self.home_topology.keys())}\n")
+                        print(f"\n[CATALOG] Topology loaded: {list(self.home_topology.keys())}\n")
                         self._topology_printed = True
             except: pass
             time.sleep(getattr(self.cc, 'loop_time', 5))
@@ -128,7 +128,7 @@ class SmartHomeController:
 
     def on_connect(self, client, userdata, flags, rc):
         if rc == 0:
-            print(f"[MQTT] Iscritto al topic: {self.sub_topic}")
+            print(f"[MQTT] Subscribed to topic: {self.sub_topic}")
             self.client.subscribe(self.sub_topic)
 
     def send_command(self, room, actuator_id, actuator_info, value, override_id=None):
@@ -146,7 +146,7 @@ class SmartHomeController:
     def on_message(self, client, userdata, msg):
         try:
             payload = json.loads(msg.payload.decode("utf-8"))
-            if not SenML.validate_SenML(payload): pass
+            if not SenML.validate_SenML(payload): return
                 
             flat_events = SenML.flatten_senml(payload)
             rooms_to_process = set()
@@ -194,7 +194,7 @@ class SmartHomeController:
                     self.apply_virtual_logic(room, temperature, presence)
 
         except Exception as e:
-            print(f"[ERRORE CONTROLLER] {e}")
+            print(f"[CONTROLLER ERROR] {e}")
 
     def apply_arduino_logic(self, room, temperature, presence):
         if presence:
@@ -223,28 +223,34 @@ class SmartHomeController:
         }
 
     def apply_virtual_logic(self, room, temperature, presence):
+        # 1. LIGHTS LOGIC
         light_val = self.cmd_lights["on"] if presence else self.cmd_lights["off"]
         self._dispatch_by_type(room, "lights", light_val)
 
+        # 2. THERMOSTAT & BLINDS LOGIC
         if presence:
+            # Comfort Mode: Set thermostat to ideal target (e.g., 22.0°C)
+            self._dispatch_by_type(room, "thermostat", self.target_temp) 
+            
             if temperature > self.target_temp:
-                self._dispatch_by_type(room, "thermostat", self.cmd_therm["cooling"]) 
                 self._dispatch_by_type(room, "blinds", self.cmd_blinds["closed"])     
             elif temperature < (self.target_temp - 2.0):
-                self._dispatch_by_type(room, "thermostat", self.cmd_therm["heating"]) 
                 self._dispatch_by_type(room, "blinds", self.cmd_blinds["open"])   
             else:
-                self._dispatch_by_type(room, "thermostat", self.cmd_therm["off"]) 
                 self._dispatch_by_type(room, "blinds", self.cmd_blinds["open"])   
         else:
+            # Eco Mode: Set thermostat to eco-friendly limits to save energy
             if temperature > (self.target_temp + 5.0):
-                self._dispatch_by_type(room, "thermostat", self.cmd_therm["cooling"]) 
+                eco_cooling_target = self.target_temp + 5.0 # e.g., 27.0°C
+                self._dispatch_by_type(room, "thermostat", eco_cooling_target) 
                 self._dispatch_by_type(room, "blinds", self.cmd_blinds["closed"])     
             elif temperature < 15.0:
-                self._dispatch_by_type(room, "thermostat", self.cmd_therm["heating"]) 
+                eco_heating_target = 15.0 # Eco winter protection
+                self._dispatch_by_type(room, "thermostat", eco_heating_target) 
                 self._dispatch_by_type(room, "blinds", self.cmd_blinds["open"])   
             else:
-                self._dispatch_by_type(room, "thermostat", self.cmd_therm["off"]) 
+                # Dead zone: Keep base eco setpoint and close blinds for insulation
+                self._dispatch_by_type(room, "thermostat", 15.0) 
                 self._dispatch_by_type(room, "blinds", self.cmd_blinds["closed"])     
 
     def start(self):

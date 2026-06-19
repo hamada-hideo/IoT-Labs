@@ -112,6 +112,7 @@ class ActuatorCommandPublisher():
                 self.broker_host = broker["ip"]
                 self.broker_port = broker["port"]
                 break
+        print(self.broker_host, self.broker_port)
     # SECTION 4: ASYNCHRONOUS PACKET INTERCEPT HOOKS
     def on_connect(self,client, userdata,flags,rc):
         """Asynchronous callback triggered when the server receives a broker acknowledgment token."""

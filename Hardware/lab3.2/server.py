@@ -22,11 +22,11 @@ class LoggerWebServer():
         for log in self.logs:
             event = log["e"][0]
 
-            # Controlla se la stanza è presente nel nome assoluto (bn+n)
+            # Checks if the room is present in the absolute name (bn+n)
             room_name = self._get_room_name(event["n"])
             match_room = (room is None) or (room_name == room)
             
-            # Controlla il tempo assoluto dell'evento (bt+t)
+            # Checks the absolute time of the event (bt+t)
             match_since = (since is None) or (event["t"] >= since)
             match_before = (before is None) or (event["t"] < before)
             
@@ -36,7 +36,7 @@ class LoggerWebServer():
         return res
     
     def _process_SenML(self, senml):
-        # Usa la funzione dal tuo modulo SenMLUtils
+        # Uses the function from your SenMLUtils module
         flat_events = self.flatten_senml(senml)
         
         ids = []
@@ -131,13 +131,13 @@ class LoggerWebServer():
 
     def flatten_senml(self, senml_doc):
         """
-        Prende in input un dizionario SenML e restituisce una lista di eventi "piatti",
-        in cui il base-name (bn) e il base-time (bt) sono stati risolti all'interno 
-        di ogni singolo evento.
+        Takes a SenML dictionary as input and returns a list of "flat" events,
+        in which the base-name (bn) and base-time (bt) have been resolved inside 
+        each individual event.
         """
         flattened_events = []
         
-        # Estraiamo bn e bt (con valori di default se non presenti)
+        # Extract bn and bt (with default values if not present)
         bn = senml_doc.get("bn", "")
         bt = senml_doc.get("bt", 0.0)
         
@@ -145,10 +145,10 @@ class LoggerWebServer():
             n = event.get("n", "")
             t = event.get("t", 0.0)
             
-            # Creiamo un evento piatto risolvendo le regole IETF SenML
+            # Create a flat event by resolving IETF SenML rules
             flat_event = {
-                "n": bn + n,      # Nome assoluto della risorsa
-                "t": bt + t,      # Timestamp assoluto dell'evento
+                "n": bn + n,      # Absolute name of the resource
+                "t": bt + t,      # Absolute timestamp of the event
                 "v": event.get("v"),
                 "u": event.get("u")
             }
