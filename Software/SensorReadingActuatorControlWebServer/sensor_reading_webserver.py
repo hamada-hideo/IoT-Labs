@@ -1,3 +1,11 @@
+# EXERCISE: Exercise 06 / Exercise 09 Extension - Sensor REST Web Server
+# ACTOR: SensorReadingWebServer (Centralized Sensor Telemetry Core)
+# DESCRIPTION: Manages and simulates physical smart home sensor nodes. Exposes 
+#              a REST API for environmental polling, translates raw streams into 
+#              SenML arrays, synchronizes logs with the historical database, and 
+#              clones data events directly to MQTT distribution channels.
+
+# SECTION 1: SYSTEM UTILITIES & DEPENDENCY OVERLAYS
 import cherrypy
 import random
 import time
@@ -16,11 +24,15 @@ from Catalog.catalog_client import *
 from SensorReadingActuatorControlWebServer.mqtt_sensors_bridge import MQTTSensorsBridge
 
 DIR = os.path.dirname(os.path.abspath(__file__))
-
+# SECTION 2: CLASS INITIALIZATION & COMPONENT LINKAGE
 class SensorReadingWebServer(object):
     exposed = True
 
     def __init__(self, ip, port, endpoint):
+        """
+        Constructor method. Loads sensor layout resources, builds descriptive profiles,
+        maps endpoints, and kicks off parallel threads for logging synchronization and MQTT.
+        """
         with open(os.path.join(DIR, "sensors_config.json"), "r") as f:
             self.resources = json.load(f)
         self.sensor_types = self._build_sensor_types()
@@ -54,7 +66,12 @@ class SensorReadingWebServer(object):
         self.mqtt_bridge = MQTTSensorsBridge(self)
         threading.Thread(target=self.mqtt_bridge.run, daemon=True).start()
 
+        # SECTION 3: AUTOMATED MAINTENANCE & PROFILE GENERATION RUNNERS
     def _try_register_refresh_loop(self):
+        """
+        Maintains structural availability states inside the central Catalog system
+        for both this collection server module and all embedded sub-devices.
+        """
         while True:
             time.sleep(self.cc.loop_time)
             if not self.registered:
@@ -72,6 +89,10 @@ class SensorReadingWebServer(object):
                         self.devices_list[i]["registered"] = False
 
     def _try_get_logger_url(self):
+        """
+        Queries the central registry ecosystem continuously to dynamically establish 
+        and mount the active connection coordinates of the central Logger database service.
+        """
         while True:
             time.sleep(self.cc.loop_time)
             res = self.cc.get_service(self.logger_id)
@@ -82,6 +103,7 @@ class SensorReadingWebServer(object):
                 break
 
     def _build_sensor_types(self):
+        """Extracts unique environmental capability identifiers present across all rooms."""
         res = set()
         for room in self.resources:
             for sensor in self.resources[room]:
@@ -89,6 +111,7 @@ class SensorReadingWebServer(object):
         return [t for t in res]
 
     def _build_devices_list(self):
+        """Constructs an exhaustive catalog blueprint dictionary for individual sensor registration."""
         res = []
         for room in self.resources:
             for sensor in self.resources[room]:
@@ -106,12 +129,14 @@ class SensorReadingWebServer(object):
         return res
 
     def _build_resource_list(self):
+        """Generates a brief structure mapping spatial units to local sensor token IDs."""
         res = dict()
         for room in self.resources:
             res[room] = [s for s in self.resources[room]]
         return res
-    
+    # SECTION 4: DATA SIMULATION & EXTENDED SENML GENERATION LAYERS
     def _simulate_value(self, s_type):
+        """Simulates environmental measurements within configured realistic boundary parameters."""
         if s_type == "temperature": 
             return round(random.uniform(15.0, 30.0), 1)
         elif s_type == "humidity": 
@@ -121,6 +146,10 @@ class SensorReadingWebServer(object):
         return 0
 
     def _generate_senml_events(self, rooms_to_read, sensors_to_read, is_room_specific):
+        """
+        Generates individual data event instances, builds metric types, and packages 
+        measurements across sequential delta timeline streams.
+        """
         events = []
         delta_t = 0.0 
         for r in rooms_to_read:
@@ -132,8 +161,12 @@ class SensorReadingWebServer(object):
                         events.append(SenML.build_event_dict(sensor_name, self.resources[r][sensor]["unit"], val, delta_t))
                         delta_t += 1.0
         return events
-        
+     # SECTION 5: HTTP REST ENDPOINTS (POLLING READ INTERACTION)
     def GET(self, *uri, **params):
+        """
+        Handles HTTP GET requests. Parses routing contexts to filter sensor events,
+        packages telemetry into SenML outputs, and clones transactions across REST and MQTT.
+        """
         clean_uri = [u.strip() for u in uri if u.strip() != ""]
         req_room = None
         req_type = None
@@ -177,24 +210,21 @@ class SensorReadingWebServer(object):
 
         if self.logger_url_valid:
             try:
-                # Effettuiamo una POST locale all'endpoint del logger (es. porta 8080)
+                
                 response = requests.post(self.logger_url, json=senml_document, timeout=2)
                 if response.status_code != 200:
                     print(f"Attenzione: Impossibile salvare il log. Risposta del server: {response.status_code} - {response.text}")
             except requests.exceptions.RequestException as e:
-                # Se il logger è spento, stampiamo l'errore su console 
-                # ma non facciamo crashare il server sensori
+               
                 print(f"Attenzione: Impossibile salvare il log. Errore: {e}")
                 self.logger_url_valid = False
                 
-                # Corretto il parametro arg mancante che causava potenziale crash
+                
                 threading.Thread(target=self._try_get_logger_url, daemon=True).start()
         else:
             print(f"Attenzione: Impossibile salvare il log. Non è stato possibile ottenere l'url del logger.")
 
-        # =========================================================
-        # Spara i dati anche su MQTT per il Controller
-        # =========================================================
+       
         self.mqtt_bridge.publish_telemetry(senml_document)
 
         return json.dumps(senml_document).encode('utf-8')
